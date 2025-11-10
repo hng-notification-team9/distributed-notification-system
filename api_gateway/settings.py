@@ -14,7 +14,7 @@ PORT = config('PORT', default=8000, cast=int)
 
 # Allow Railway domain and your custom domain
 ALLOWED_HOSTS = [
-    '.railway.app',
+    'distributed-notification-system-production.up.railway.app'
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
