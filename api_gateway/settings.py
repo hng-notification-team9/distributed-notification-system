@@ -12,9 +12,9 @@ DEBUG = config('DEBUG', default=False, cast=bool)
 # Railway provides PORT environment variable
 PORT = config('PORT', default=8000, cast=int)
 
-# Allow Railway domain and your custom domain
 ALLOWED_HOSTS = [
-    'distributed-notification-system-production.up.railway.app'
+    'distributed-notification-system-production.up.railway.app',
+    '.railway.app',
     'localhost',
     '127.0.0.1',
     '0.0.0.0',
