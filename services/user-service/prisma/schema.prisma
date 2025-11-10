@@ -1,0 +1,62 @@
+// This is your Prisma schema file
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model - Stores user authentication and contact info
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String   // Hashed with bcrypt
+  first_name String?
+  last_name  String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  preferences UserPreferences?
+  push_tokens PushToken[]
+
+  @@map("users")
+}
+
+// UserPreferences Model - Stores notification preferences
+model UserPreferences {
+  id                       String   @id @default(uuid())
+  user_id                  String   @unique
+  email_notifications      Boolean  @default(true)
+  push_notifications       Boolean  @default(true)
+  notification_frequency   String   @default("instant") // instant, daily, weekly
+  timezone                 String   @default("UTC")
+  language                 String   @default("en")
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
+
+// PushToken Model - Stores device tokens for push notifications
+model PushToken {
+  id         String   @id @default(uuid())
+  user_id    String
+  token      String   @unique
+  device_type String  // ios, android, web
+  device_name String?
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("push_tokens")
+}
