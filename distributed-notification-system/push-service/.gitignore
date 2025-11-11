@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+credentials/
+*.log
+.DS_Store
+testQueue.ts

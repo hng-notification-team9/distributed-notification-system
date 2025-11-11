@@ -1,0 +1,54 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: pushdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: xyler23
+    ports:
+      - "5434:5434"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pushdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  push-service:
+    build: .
+    ports:
+      - "4000:4000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    env_file: .env
+
+volumes:
+  postgres_data:
