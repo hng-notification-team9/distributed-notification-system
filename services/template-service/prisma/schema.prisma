@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  type        String   // 'email' or 'push'
+  subject     String?  // Only for email templates
+  body        String   @db.Text
+  language    String   @default("en")
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  versions    TemplateVersion[]
+  variables   TemplateVariable[]
+
+  @@index([type])
+  @@index([language])
+  @@index([is_active])
+  @@map("templates")
+}
+
+model TemplateVersion {
+  id           String   @id @default(uuid())
+  template_id  String
+  version      Int
+  subject      String?
+  body         String   @db.Text
+  change_note  String?
+  created_by   String?
+  created_at   DateTime @default(now())
+
+  template     Template @relation(fields: [template_id], references: [id], onDelete: Cascade)
+
+  @@unique([template_id, version])
+  @@index([template_id])
+  @@map("template_versions")
+}
+
+model TemplateVariable {
+  id           String   @id @default(uuid())
+  template_id  String
+  variable_key String   // e.g., 'user_name', 'order_id'
+  description  String?
+  is_required  Boolean  @default(false)
+  default_value String?
+  created_at   DateTime @default(now())
+
+  template     Template @relation(fields: [template_id], references: [id], onDelete: Cascade)
+
+  @@unique([template_id, variable_key])
+  @@index([template_id])
+  @@map("template_variables")
+}
