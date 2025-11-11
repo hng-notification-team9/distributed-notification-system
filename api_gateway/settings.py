@@ -83,29 +83,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'api_gateway.wsgi.application'
 
-# Cache configuration - fallback to local memory if Redis not available
-REDIS_URL = config('REDIS_URL', default=None)
-if REDIS_URL and 'redis://' in REDIS_URL:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': REDIS_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            }
+# Redis cache configuration - FIXED
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
     }
-else:
-    # Fallback to local memory cache
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'api-gateway-cache',
-        }
-    }
+}
 
-# RabbitMQ configuration
-RABBITMQ_URL = config('RABBITMQ_URL', default=None)
+# Use Redis for sessions (optional but recommended)
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
+# RabbitMQ configuration - FIXED
+RABBITMQ_URL = config('RABBITMQ_URL', default='amqp://myuser:mypassword@localhost:5672/')
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
