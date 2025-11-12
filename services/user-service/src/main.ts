@@ -10,23 +10,42 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
+  // ✅ FIX 1: Trust proxy - Cast to 'any' to access Express methods
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set("trust proxy", 1);
+
   // Security: Helmet helps secure Express apps
   app.use(helmet());
 
-  // Rate limiting
+  // ✅ FIX 2: Rate limiting - Remove trustProxy option if not supported
   app.use(
     rateLimit({
       windowMs: configService.get<number>("RATE_LIMIT_TTL", 60) * 1000,
       max: configService.get<number>("RATE_LIMIT_MAX", 100),
       message: "Too many requests from this IP, please try again later.",
+      standardHeaders: true,
+      legacyHeaders: false,
     })
   );
 
-  // Enable CORS
-  app.enableCors({
-    origin: configService.get<string>("CORS_ORIGIN", "http://localhost:3000"),
-    credentials: true,
-  });
+  // ✅ Enable CORS for all origins (microservices communication)
+  const nodeEnv = configService.get<string>("NODE_ENV", "development");
+
+  if (nodeEnv === "production") {
+    // Production: Allow all Azure services
+    app.enableCors({
+      origin: "*",
+      methods: "GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS",
+      credentials: true,
+      allowedHeaders: "Content-Type,Authorization,Accept",
+    });
+  } else {
+    // Development: Allow localhost
+    app.enableCors({
+      origin: configService.get<string>("CORS_ORIGIN", "http://localhost:3000"),
+      credentials: true,
+    });
+  }
 
   // Global validation pipe
   app.useGlobalPipes(
@@ -73,10 +92,10 @@ async function bootstrap() {
   await app.listen(port);
 
   console.log(`
-    ��� User Service is running!
-    ��� API Documentation: http://localhost:${port}/api/docs
-    ��� Environment: ${configService.get<string>("NODE_ENV", "development")}
-    ��� Port: ${port}
+    🚀 User Service is running!
+    📚 API Documentation: http://localhost:${port}/api/docs
+    🌍 Environment: ${nodeEnv}
+    🔌 Port: ${port}
   `);
 }
 
