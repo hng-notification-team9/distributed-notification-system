@@ -9,7 +9,9 @@ async function start() {
   await fastify.register(health);
   await fastify.register(metrics);
 
-  await fastify.listen({ port: 3000 });
+  const PORT = parseInt(process.env.PORT || '3000');
+
+  await fastify.listen({ port: PORT, host: '0.0.0.0' }); // <-- bind to 0.0.0.0
 
   // start RabbitMQ consumer in the background
   runConsumer().catch(err => {
