@@ -1,6 +1,8 @@
 import Fastify from 'fastify';
 import health from './routes/health';
 import metrics from './routes/metrics';
+import statusRoutes from './routes/status/id';
+import metricsIdRoutes from './routes/metrics/id';
 import { runConsumer } from './consumer-run';
 
 async function start() {
@@ -8,6 +10,9 @@ async function start() {
 
   await fastify.register(health);
   await fastify.register(metrics);
+  await fastify.register(statusRoutes);
+  await fastify.register(metricsIdRoutes);
+
 
   const PORT = parseInt(process.env.PORT || '3000');
 

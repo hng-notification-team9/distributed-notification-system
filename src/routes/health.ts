@@ -1,15 +1,65 @@
-import 'dotenv/config'; // Must be first
 import { FastifyInstance } from 'fastify';
-import { Pool } from 'pg';
-import Redis from 'ioredis';
+import amqplib from 'amqplib';
+import { allowRequest, recordFailure, reset } from '../services/circuit_breaker';
+import { redis } from '../db/postgres';
 
-const pg = new Pool({ connectionString: process.env.DATABASE_URL });
-const redis = new Redis(process.env.REDIS_URL);
+const rabbitUrl = process.env.RABBIT_URL || 'amqp://localhost';
+const queue = process.env.PUSH_QUEUE || 'push_queue';
 
-export default async function (fastify: FastifyInstance) {
-  fastify.get('/health', async () => {
-    const dbOk = await pg.query('SELECT 1');
-    const redisOk = await redis.ping();
-    return { status: 'ok', db: !!dbOk, redis: redisOk === 'PONG' };
+export default async function health(fastify: FastifyInstance) {
+  fastify.get('/health', {
+    schema: {
+      summary: 'Check service health',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            status: { type: 'string' },
+            service: { type: 'string' },
+            queue: { type: 'string' },
+            queue_length: { type: 'integer' },
+            circuit_breaker: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async () => {
+    let queueStatus = 'unknown';
+    let queueLength = 0;
+    let circuitBreakerState = 'closed';
+
+    try {
+      const allowed = await allowRequest();
+      if (!allowed) circuitBreakerState = 'open';
+
+      const conn = await amqplib.connect(rabbitUrl);
+      const channel = await conn.createChannel();
+      const q = await channel.checkQueue(queue);
+      queueStatus = 'healthy';
+      queueLength = q.messageCount;
+      await channel.close();
+      await conn.close();
+
+      await reset();
+
+      return {
+        status: 'ok',
+        service: 'push-service',
+        queue: queueStatus,
+        queue_length: queueLength,
+        circuit_breaker: circuitBreakerState,
+      };
+    } catch (err) {
+      await recordFailure();
+      queueStatus = 'disconnected';
+      circuitBreakerState = 'open';
+      return {
+        status: 'error',
+        service: 'push-service',
+        queue: queueStatus,
+        queue_length: queueLength,
+        circuit_breaker: circuitBreakerState,
+      };
+    }
   });
 }
