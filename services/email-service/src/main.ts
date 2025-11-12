@@ -4,17 +4,19 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  await app.listen(process.env.PORT ?? 3000);
-  const microservice = app.connectMicroservice<MicroserviceOptions>({
+  app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
-      queue: 'email_queue',
+      exchange: 'notifications.direct',
+      exchangeType: 'direct',
+      queue: 'email.queue',
       queueOptions: {
-        durable: false,
+        durable: true,
       },
     },
   });
 
   await app.startAllMicroservices();
+  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
