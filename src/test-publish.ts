@@ -12,10 +12,15 @@ async function main() {
   const msg = {
     request_id: `test-${Date.now()}`,
     recipient_id: 'user-123',
-    device_token: 'dummy',
-    payload: { title: 'Test', body: 'Hello from exchange!' },
+    device_token: 'fcm-dummy-token-123',  // REQUIRED
+    payload: {
+      title: 'Hello from Template!',
+      body: 'Your order ORD-999 is ready.',
+      data: { orderId: 'ORD-999' }
+    }
   };
 
+  console.log('Publishing complete push message...');
   await publish(ch, process.env.PUSH_QUEUE!, msg);
 
   setTimeout(() => {
