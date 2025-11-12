@@ -1,6 +1,7 @@
 import logging
 from rest_framework import status
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.core.cache import cache
@@ -118,9 +119,9 @@ class NotificationView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-# Keep the status update function as is (it has a different URL pattern)
 @api_view(['POST'])
 def update_notification_status(request, notification_type):
+    """Update notification status"""
     try:
         serializer = NotificationStatusUpdateSerializer(data=request.data)
         if not serializer.is_valid():
