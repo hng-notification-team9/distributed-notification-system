@@ -1,6 +1,6 @@
 import logging
 from rest_framework import status
-from rest_framework.decorators import api_view
+from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.core.cache import cache
@@ -36,72 +36,91 @@ class NotificationPagination(PageNumberPagination):
             }).data
         }).data
 
-@api_view(['POST'])
-def create_notification(request):
-
-    try:
-        serializer = NotificationCreateSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                APIResponseSerializer({
-                    'success': False,
-                    'error': 'Validation failed',
-                    'message': 'Invalid request data',
-                    'data': serializer.errors
-                }).data,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        data = serializer.validated_data
-        request_id = data['request_id']
-        
-     
-        notification_service = NotificationService()
-        existing_response = notification_service.check_idempotency(request_id)
-        if existing_response:
-            logger.info(f"Idempotent request detected: {request_id}")
-            return Response(existing_response)
-        
-     
-        success = notification_service.send_notification(data)
-        
-        if success:
-            response_data = APIResponseSerializer({
-                'success': True,
-                'data': {
-                    'notification_id': data['request_id'],
-                    'status': 'queued'
-                },
-                'message': 'Notification queued successfully'
-            }).data
-        
-            notification_service.store_idempotency_key(request_id, response_data)
+class NotificationView(APIView):
+    def get(self, request):
+        """List all notifications"""
+        try:
+            paginator = NotificationPagination()
+            notifications = Notification.objects.all().order_by('-created_at')
+            result_page = paginator.paginate_queryset(notifications, request)
             
-            return Response(response_data, status=status.HTTP_202_ACCEPTED)
-        else:
+            serializer = NotificationResponseSerializer(result_page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+            
+        except Exception as e:
+            logger.error(f"Error listing notifications: {str(e)}")
             return Response(
                 APIResponseSerializer({
                     'success': False,
-                    'error': 'Queueing failed',
-                    'message': 'Failed to queue notification'
+                    'error': 'Internal server error',
+                    'message': 'Failed to retrieve notifications'
                 }).data,
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            
-    except Exception as e:
-        logger.error(f"Error creating notification: {str(e)}")
-        return Response(
-            APIResponseSerializer({
-                'success': False,
-                'error': 'Internal server error',
-                'message': 'An error occurred while processing your request'
-            }).data,
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
 
+    def post(self, request):
+        """Create a new notification"""
+        try:
+            serializer = NotificationCreateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return Response(
+                    APIResponseSerializer({
+                        'success': False,
+                        'error': 'Validation failed',
+                        'message': 'Invalid request data',
+                        'data': serializer.errors
+                    }).data,
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            data = serializer.validated_data
+            request_id = data['request_id']
+            
+            notification_service = NotificationService()
+            existing_response = notification_service.check_idempotency(request_id)
+            if existing_response:
+                logger.info(f"Idempotent request detected: {request_id}")
+                return Response(existing_response)
+            
+            success = notification_service.send_notification(data)
+            
+            if success:
+                response_data = APIResponseSerializer({
+                    'success': True,
+                    'data': {
+                        'notification_id': data['request_id'],
+                        'status': 'queued'
+                    },
+                    'message': 'Notification queued successfully'
+                }).data
+            
+                notification_service.store_idempotency_key(request_id, response_data)
+                
+                return Response(response_data, status=status.HTTP_202_ACCEPTED)
+            else:
+                return Response(
+                    APIResponseSerializer({
+                        'success': False,
+                        'error': 'Queueing failed',
+                        'message': 'Failed to queue notification'
+                    }).data,
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except Exception as e:
+            logger.error(f"Error creating notification: {str(e)}")
+            return Response(
+                APIResponseSerializer({
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': 'An error occurred while processing your request'
+                }).data,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+# Keep the status update function as is (it has a different URL pattern)
 @api_view(['POST'])
 def update_notification_status(request, notification_type):
-
     try:
         serializer = NotificationStatusUpdateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -148,28 +167,6 @@ def update_notification_status(request, notification_type):
                 'success': False,
                 'error': 'Internal server error',
                 'message': 'Failed to update status'
-            }).data,
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-@api_view(['GET'])
-def list_notifications(request):
-
-    try:
-        paginator = NotificationPagination()
-        notifications = Notification.objects.all().order_by('-created_at')
-        result_page = paginator.paginate_queryset(notifications, request)
-        
-        serializer = NotificationResponseSerializer(result_page, many=True)
-        return paginator.get_paginated_response(serializer.data)
-        
-    except Exception as e:
-        logger.error(f"Error listing notifications: {str(e)}")
-        return Response(
-            APIResponseSerializer({
-                'success': False,
-                'error': 'Internal server error',
-                'message': 'Failed to retrieve notifications'
             }).data,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
