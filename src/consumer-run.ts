@@ -1,19 +1,30 @@
-// src/consumer-runner.ts
+// src/consumer-run.ts
 import amqplib from 'amqplib';
 import { startConsumer } from './queue/consumer';
 import { logger } from './logger';
 
+let channel: any;
+
 export async function runConsumer() {
   const conn = await amqplib.connect(process.env.RABBIT_URL!);
-  const ch = await conn.createChannel();
+  channel = await conn.createChannel();
 
-  process.on('SIGINT', async () => {
-    logger.info('Shutting down consumer...');
-    await ch.close();
-    await conn.close();
-    process.exit(0);
+  channel.on('error', (err) => logger.error({ err }, 'Channel error'));
+  channel.on('close', () => {
+    logger.warn('Channel closed — reconnecting...');
+    setTimeout(runConsumer, 5000);
   });
 
-  await startConsumer(ch);
-  logger.info('Push consumer started');
+  conn.on('error', () => logger.error('Connection error'));
+  conn.on('close', () => setTimeout(runConsumer, 5000));
+
+  try {
+    await startConsumer(channel);
+    logger.info('Consumer started');
+  } catch (err) {
+    logger.error({ err }, 'Consumer failed — retrying...');
+    setTimeout(runConsumer, 5000);
+  }
+
+  return channel;
 }

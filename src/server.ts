@@ -10,7 +10,7 @@ import metricsIdRoutes from './routes/metrics/id';
 async function start() {
   const fastify = Fastify({ logger: true });
 
-  // === REGISTER ROUTES (BEFORE SERVER START) ===
+  // === REGISTER ROUTES ===
   fastify.register(health);
   fastify.register(metrics);
   fastify.register(statusRoutes);
@@ -19,7 +19,6 @@ async function start() {
   // === /api/push ENDPOINT ===
   fastify.post('/api/push', async (request, reply) => {
     const body = request.body as any;
-
     const { request_id, recipient_id, device_token, payload } = body;
 
     if (!request_id || !recipient_id || !device_token || !payload?.title || !payload?.body) {
@@ -30,31 +29,33 @@ async function start() {
     }
 
     try {
-      const channel = await fastify.rabbitChannel; // We'll set this below
+      const channel = fastify.rabbitChannel; // Now safe
+      if (!channel) throw new Error('RabbitMQ channel not ready');
       await publish(channel, process.env.PUSH_QUEUE!, body);
       return reply.send({ status: 'queued', request_id });
     } catch (err: any) {
-      fastify.log.error({ err }, 'Failed to publish to queue');
-      return reply.status(500).send({ error: 'Failed to queue push' });
+      fastify.log.error({ err }, 'Failed to publish');
+      return reply.status(500).send({ error: 'Failed to queue' });
     }
   });
+
+  // === START RABBITMQ CONSUMER FIRST ===
+  let rabbitChannel: any;
+  try {
+    rabbitChannel = await runConsumer(); // Returns channel
+    fastify.decorate('rabbitChannel', rabbitChannel); // SAFE: before listen
+    fastify.log.info('Consumer started and channel ready');
+  } catch (err: any) {
+    fastify.log.error({ err }, 'Consumer failed to start');
+    // Continue — API still works, just no consumer
+  }
 
   // === START SERVER ===
   const PORT = parseInt(process.env.PORT || '4001', 10);
   await fastify.listen({ port: PORT, host: '0.0.0.0' });
-  fastify.log.info(`API running at http://0.0.0.0:${PORT}/api/push`);
-
-  // === START RABBITMQ CONSUMER ===
-  try {
-    const channel = await runConsumer(); // Returns channel
-    fastify.decorate('rabbitChannel', channel); // Save for /api/push
-    fastify.log.info('Consumer started');
-  } catch (err: any) {
-    fastify.log.error({ err }, 'Consumer failed to start');
-  }
+  fastify.log.info(`API: http://0.0.0.0:${PORT}/api/push`);
 }
 
-// === DECORATE HELPER ===
 declare module 'fastify' {
   interface FastifyInstance {
     rabbitChannel: any;
@@ -62,6 +63,6 @@ declare module 'fastify' {
 }
 
 start().catch(err => {
-  console.error('Server failed to start:', err);
+  console.error('Server crashed:', err);
   process.exit(1);
 });

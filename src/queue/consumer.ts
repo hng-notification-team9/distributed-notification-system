@@ -9,7 +9,7 @@ import type { Channel } from 'amqplib';
 export interface PushMessage {
   request_id: string;
   recipient_id: string;
-  device_token: string;  // REQUIRED
+  device_token: string;
   payload: {
     title: string;
     body: string;
@@ -20,72 +20,78 @@ export interface PushMessage {
 export async function startConsumer(ch: Channel) {
   const queue = process.env.PUSH_QUEUE!;
   const failedQueue = process.env.FAILED_QUEUE!;
+  const exchange = process.env.RABBIT_EXCHANGE!;
   const maxRetries = Number(process.env.MAX_RETRIES || 5);
   const idempotencyTTL = Number(process.env.IDEMPOTENCY_TTL || 86400);
 
-  await ch.assertQueue(queue, {
-    durable: true,
-    arguments: {
-      'x-dead-letter-exchange': process.env.RABBIT_EXCHANGE!,
-      'x-dead-letter-routing-key': failedQueue,
-    },
-  });
+  try {
+    await ch.assertExchange(exchange, 'direct', { durable: true });
 
-  await ch.assertQueue(failedQueue, { durable: true });
+    // === push.queue: WITH DLX ===
+    try {
+      await ch.assertQueue(queue, {
+        durable: true,
+        arguments: {
+          'x-dead-letter-exchange': exchange,
+          'x-dead-letter-routing-key': failedQueue,
+        },
+      });
+    } catch (err: any) {
+      if (err.message.includes('PRECONDITION_FAILED')) {
+        logger.warn(`Using existing ${queue}`);
+        await ch.checkQueue(queue);
+      } else throw err;
+    }
 
-  ch.prefetch(1);
-  logger.info(`[Consumer] Listening on queue "${queue}"`);
+    // === failed.queue: NO DLX — NEVER ADD IT ===
+    try {
+      await ch.assertQueue(failedQueue, { durable: true }); // NO ARGUMENTS
+    } catch (err: any) {
+      if (err.message.includes('PRECONDITION_FAILED')) {
+        logger.warn(`Using existing ${failedQueue} (no DLX)`);
+        await ch.checkQueue(failedQueue);
+      } else throw err;
+    }
 
-  await ch.consume(
-    queue,
-    async (msg) => {
+    await ch.bindQueue(queue, exchange, queue);
+    await ch.bindQueue(failedQueue, exchange, failedQueue);
+
+    ch.prefetch(1);
+    logger.info(`[Consumer] Listening on queue "${queue}"`);
+
+    await ch.consume(queue, async (msg) => {
       if (!msg) return;
 
       let body: PushMessage;
-      try {
-        body = JSON.parse(msg.content.toString());
-      } catch (e) {
-        logger.error({ err: e, raw: msg.content.toString() }, 'Invalid JSON');
-        ch.ack(msg);
-        return;
-      }
+      try { body = JSON.parse(msg.content.toString()); }
+      catch (e) { logger.error({ e }, 'Invalid JSON'); ch.ack(msg); return; }
 
-      // === VALIDATE REQUIRED FIELDS ===
       if (!body.request_id || !body.recipient_id || !body.device_token || !body.payload?.title) {
-        logger.error({ body }, 'Invalid push message – missing required fields');
+        logger.error({ body }, 'Invalid message');
         ch.ack(msg);
         return;
       }
 
-      const { request_id } = body;
-      const headers = msg.properties.headers ?? {};
-      const attempts = (headers.attempts as number) ?? 0 + 1;
+      const request_id = body.request_id;
+      const attempts = (msg.properties.headers?.attempts as number ?? 0) + 1;
 
-      logger.info({ request_id, attempts, queue }, 'Message received');
+      logger.info({ request_id, attempts }, 'Message received');
 
       try {
-        // === IDEMPOTENCY ===
         const redisKey = `push:dedup:${request_id}`;
-        const cached = await redis.get(redisKey);
-        if (cached === 'sent') {
-          logger.info({ request_id }, 'Skipped: already sent (Redis)');
+        if (await redis.get(redisKey) === 'sent') {
+          logger.info({ request_id }, 'Skipped: already sent');
           ch.ack(msg);
           return;
         }
 
-        const { rows } = await pg.query(
-          'SELECT status FROM notifications WHERE request_id = $1',
-          [request_id]
-        );
-
+        const { rows } = await pg.query('SELECT status FROM notifications WHERE request_id = $1', [request_id]);
         if (rows.length && rows[0].status === 'sent') {
           await redis.set(redisKey, 'sent', 'EX', idempotencyTTL);
-          logger.info({ request_id }, 'Skipped: already sent (DB)');
           ch.ack(msg);
           return;
         }
 
-        // === INSERT NOTIFICATION ===
         await pg.query(
           `INSERT INTO notifications
              (id, request_id, recipient_id, device_token, channel, payload, status, attempts)
@@ -95,64 +101,60 @@ export async function startConsumer(ch: Channel) {
              status = 'processing',
              attempts = notifications.attempts + 1,
              updated_at = now()`,
-          [
-            request_id,
-            body.recipient_id,
-            body.device_token,
-            'push',
-            JSON.stringify(body.payload),
-            attempts,
-          ]
+          [request_id, body.recipient_id, body.device_token, 'push', JSON.stringify(body.payload), attempts]
         );
 
-        // === SEND TO FCM ===
-        logger.info({ request_id }, 'Sending push to FCM');
         await sendPush(body);
 
-        // === MARK AS SENT ===
         await pg.query(
           `UPDATE notifications SET status='sent', updated_at=now(), attempts=$1 WHERE request_id=$2`,
           [attempts, request_id]
         );
         await redis.set(redisKey, 'sent', 'EX', idempotencyTTL);
 
-        logger.info({ request_id }, 'Push delivered and recorded');
+        logger.info({ request_id }, 'Push delivered');
         ch.ack(msg);
       } catch (err: any) {
-        logger.error({ err, request_id, attempts }, 'Push delivery failed');
+        logger.error({ err, request_id, attempts }, 'Push failed');
 
         if (attempts < maxRetries) {
           const delay = backoffMs(attempts);
-          logger.warn({ request_id, attempts, delay }, 'Retrying...');
-
-          await pg.query(
-            `UPDATE notifications SET attempts=$1, updated_at=now() WHERE request_id=$2`,
-            [attempts, request_id]
-          );
-
           setTimeout(() => {
-            publish(ch, queue, body, { headers: { attempts: attempts + 1 } });
+            try { publish(ch, queue, body, { headers: { attempts: attempts + 1 } }); }
+            catch (e) { logger.error({ e }, 'Retry failed'); }
           }, delay);
-
           ch.ack(msg);
           return;
         }
 
         // === FINAL FAILURE ===
-        await pg.query(
-          `UPDATE notifications SET status='failed', last_error=$1, attempts=$2 WHERE request_id=$3`,
-          [err.message, attempts, request_id]
-        );
+        try {
+          await pg.query(
+            `UPDATE notifications SET status='failed', last_error=$1, attempts=$2 WHERE request_id=$3`,
+            [err.message, attempts, request_id]
+          );
+        } catch (dbErr) {
+          logger.error({ dbErr }, 'DB update failed');
+        }
 
-        publish(ch, failedQueue, {
-          ...body,
-          last_error: err.message,
-          failed_at: new Date().toISOString(),
-        });
+        // === SEND TO failed.queue (NO DLX) ===
+        try {
+          await publish(ch, failedQueue, {
+            ...body,
+            last_error: err.message,
+            failed_at: new Date().toISOString(),
+          });
+          logger.info({ request_id }, 'Sent to failed.queue');
+        } catch (pubErr) {
+          logger.error({ pubErr, request_id }, 'Failed to publish to failed.queue');
+        }
 
         ch.ack(msg);
       }
-    },
-    { noAck: false }
-  );
+    }, { noAck: false });
+
+  } catch (err: any) {
+    logger.error({ err }, 'Consumer setup failed');
+    throw err;
+  }
 }
