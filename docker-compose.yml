@@ -1,0 +1,22 @@
+version: '3.8'
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports: ["5672:5672","15672:15672"]
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: xyler23
+      POSTGRES_DB: pushdb
+    ports: ["5434:5434"]
+  push-service:
+    build: .
+    environment:
+      - RABBIT_URL=amqp://rabbitmq:5672
+      - POSTGRES_URL=postgres://postgres:xyler23@postgres:5434/push
+      - REDIS_URL=redis://default:qsoXJWpuZYZXzSpslBdRWLDyTAyCYVVg@yamabiko.proxy.rlwy.net:21006
+      - FCM_SERVICE_ACCOUNT_PATH=/secrets/firebase-admin.json
+    depends_on: [rabbitmq, redis, postgres]

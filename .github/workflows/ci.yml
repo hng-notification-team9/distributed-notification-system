@@ -1,0 +1,23 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+         node-version: 18
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+  deploy:
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to server
+        run: |
+          scp -r . ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/srv/push-service
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} 'cd /srv/push-service && docker compose pull && docker compose up -d --build'
