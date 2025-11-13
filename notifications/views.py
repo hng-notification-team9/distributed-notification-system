@@ -1,4 +1,3 @@
-# views.py - Final cleaned version
 import logging
 from rest_framework import status
 from rest_framework.views import APIView
@@ -181,7 +180,7 @@ def update_notification_status(request, notification_type):
         )
 
 
-# Circuit Breaker Monitoring Endpoints
+
 @api_view(['GET'])
 def circuit_breaker_status(request):
     """Get current status of all circuit breakers"""
@@ -225,10 +224,10 @@ def simulate_failure(request, breaker_name):
     
     try:
         breaker = circuit_breaker_manager.get_breaker(breaker_name)
-        # Simulate multiple failures to trigger circuit breaker
+       
         for i in range(breaker.failure_threshold + 1):
             try:
-                breaker.call(lambda: 1/0)  # Always fails
+                breaker.call(lambda: 1/0)  
             except (CircuitBreakerError, ZeroDivisionError):
                 pass
         

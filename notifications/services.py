@@ -23,7 +23,7 @@ class CircuitBreaker:
         self.recovery_timeout = recovery_timeout
         self.expected_exceptions = expected_exceptions
         self.failures = 0
-        self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self.state = "CLOSED"  
         self.last_failure_time = None
         self.last_state_change = time.time()
     
@@ -93,7 +93,7 @@ class RetrySystem:
         """
         last_exception = None
         
-        for attempt in range(max_retries + 1):  # +1 for the initial attempt
+        for attempt in range(max_retries + 1):  
             try:
                 if attempt > 0:
                     logger.info("Retry attempt %d/%d", attempt, max_retries)
@@ -104,7 +104,7 @@ class RetrySystem:
                     logger.error("All %d retry attempts failed: %s", max_retries, str(e))
                     break
                 
-                # Calculate delay with exponential backoff and jitter
+               
                 delay = min(base_delay * (2 ** attempt), max_delay)
                 jitter = delay * 0.1  # 10% jitter
                 actual_delay = delay + (jitter * (0.5 - (time.time() % 1)))
@@ -139,7 +139,7 @@ class CircuitBreakerManager:
             breaker.reset()
 
 
-# Global circuit breaker manager
+
 circuit_breaker_manager = CircuitBreakerManager()
 
 
@@ -162,7 +162,7 @@ class RabbitMQService:
                 durable=True
             )
             
-            # Declare queues
+           
             queues = ['email.queue', 'push.queue', 'failed.queue']
             for queue in queues:
                 try:
@@ -172,7 +172,7 @@ class RabbitMQService:
                         logger.info("Queue %s not found, creating it...", queue)
                         self.channel.queue_declare(queue=queue, durable=True)
                         
-                        # Bind only email and push queues to exchange
+                      
                         if queue in ['email.queue', 'push.queue']:
                             self.channel.queue_bind(
                                 exchange='notifications.direct', 
@@ -216,7 +216,7 @@ class RabbitMQService:
 class NotificationService:
     def __init__(self):
         self.rabbitmq = RabbitMQService()
-        # Circuit breakers for different components
+        
         self.mq_breaker = circuit_breaker_manager.get_breaker(
             'rabbitmq',
             failure_threshold=3,
@@ -231,7 +231,7 @@ class NotificationService:
     
     def send_notification(self, notification_data):
         try:
-            # Use circuit breaker for database operation with retry
+            
             notification = self._execute_with_retry_and_circuit_breaker(
                 self.db_breaker,
                 lambda: self._create_notification_record(notification_data),
@@ -247,7 +247,7 @@ class NotificationService:
                 'priority': notification_data.get('priority', 1),
             }
             
-            # Use circuit breaker for RabbitMQ operation with retry
+            
             routing_key = f"{notification_data['notification_type']}.queue"
             success = self._execute_with_retry_and_circuit_breaker(
                 self.mq_breaker,
@@ -256,7 +256,7 @@ class NotificationService:
             )
             
             if not success:
-                # Update notification status to failed with retry
+                
                 self._execute_with_retry(
                     lambda: self._update_notification_status(notification.id, 'failed')
                 )
@@ -267,7 +267,7 @@ class NotificationService:
             
         except CircuitBreakerError as e:
             logger.error("Circuit breaker blocked notification: %s", str(e))
-            # Create a failed notification record when circuit breaker is open
+            
             try:
                 self._execute_with_retry(
                     lambda: Notification.objects.create(
@@ -320,15 +320,15 @@ class NotificationService:
     
     def check_idempotency(self, request_id):
         try:
-            # Try cache first
+           
             cached_response = cache.get(f"idempotency_{request_id}")
             if cached_response:
                 return cached_response
             
-            # Fallback to database
+           
             try:
                 key_record = IdempotencyKey.objects.get(key=request_id)
-                # Cache the result for future requests
+                
                 cache.set(f"idempotency_{request_id}", key_record.response, timeout=86400)
                 return key_record.response
             except ObjectDoesNotExist:
