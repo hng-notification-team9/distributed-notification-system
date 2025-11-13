@@ -2,16 +2,17 @@
 
 **Distributed Notification System - User Management Microservice**
 
-## Ì≥ã Overview
+## ÔøΩÔøΩÔøΩ Overview
 
 The User Service handles:
+
 - User authentication (registration, login)
 - User profile management
 - Notification preferences
 - Push notification tokens
 - Authorization and access control
 
-## Ìª†Ô∏è Tech Stack
+## ÔøΩÔøΩÔøΩÔ∏è Tech Stack
 
 - **Runtime**: Node.js 20.x
 - **Framework**: NestJS (TypeScript)
@@ -21,7 +22,7 @@ The User Service handles:
 - **Documentation**: Swagger/OpenAPI
 - **Container**: Docker
 
-## Ì∫Ä Quick Start
+## ÔøΩÔøΩÔøΩ Quick Start
 
 ### Prerequisites
 
@@ -30,6 +31,7 @@ The User Service handles:
 - Docker & Docker Compose (optional)
 
 ### Installation
+
 ```bash
 # Install dependencies
 npm install
@@ -50,19 +52,21 @@ npm run start:dev
 ```
 
 The service will be available at:
-- **API**: http://localhost:3001/api/v1
-- **Swagger**: http://localhost:3001/api/docs
-- **Health**: http://localhost:3001/api/v1/health
 
-## Ì≥ö API Endpoints
+- **API**: https://user-service-app.blacksky-6bcbe9ee.uksouth.azurecontainerapps.io/api/v1/
+- **Swagger**: https://user-service-app.blacksky-6bcbe9ee.uksouth.azurecontainerapps.io/api/docs
+- **Health**: https://user-service-app.blacksky-6bcbe9ee.uksouth.azurecontainerapps.io/api/v1/health
+
+## ÔøΩÔøΩÔøΩ API Endpoints
 
 ### Public Endpoints
 
 ### Protected Endpoints (Requires JWT)
 
-## Ì≥ä Response Format
+## ÔøΩÔøΩÔøΩ Response Format
 
 All responses follow this format:
+
 ```json
 {
   "success": boolean,
@@ -80,13 +84,15 @@ All responses follow this format:
 }
 ```
 
-## Ì∑™ Testing
+## ÔøΩÔøΩÔøΩ Testing
+
 ```bash
 npm test
 npm run test:cov
 ```
 
-## Ì∞≥ Docker
+## ÔøΩÔøΩÔøΩ Docker
+
 ```bash
 # Build image
 docker build -t user-service:latest .
@@ -95,21 +101,21 @@ docker build -t user-service:latest .
 docker-compose up
 ```
 
-## Ì¥ê Environment Variables
+## ÔøΩÔøΩÔøΩ Environment Variables
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| DATABASE_URL | PostgreSQL connection string | Yes |
-| JWT_SECRET | JWT signing secret | Yes |
-| JWT_EXPIRATION | JWT token expiration | No (default: 24h) |
-| JWT_REFRESH_SECRET | Refresh token secret | Yes |
-| PORT | Server port | No (default: 3001) |
-| NODE_ENV | Environment | No (default: development) |
+| Variable           | Description                  | Required                  |
+| ------------------ | ---------------------------- | ------------------------- |
+| DATABASE_URL       | PostgreSQL connection string | Yes                       |
+| JWT_SECRET         | JWT signing secret           | Yes                       |
+| JWT_EXPIRATION     | JWT token expiration         | No (default: 24h)         |
+| JWT_REFRESH_SECRET | Refresh token secret         | Yes                       |
+| PORT               | Server port                  | No (default: 3001)        |
+| NODE_ENV           | Environment                  | No (default: development) |
 
-## Ì≥Ñ License
+## ÔøΩÔøΩÔøΩ License
 
 This project is part of HNG Internship Stage 8.
 
-## Ì±• Team
+## ÔøΩÔøΩÔøΩ Team
 
 Team 9 - Distributed Notification System
