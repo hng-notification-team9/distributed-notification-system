@@ -14,6 +14,7 @@ from .serializers import (
     PaginationMetaSerializer
 )
 from .services import NotificationService, CircuitBreaker
+from rest_framework.throttling import UserRateThrottle
 
 logger = logging.getLogger('notifications')
 
@@ -37,7 +38,11 @@ class NotificationPagination(PageNumberPagination):
             }
         })
 
+class NotificationThrottle(UserRateThrottle):
+    rate = '1000/hour'
+    
 class NotificationView(APIView):
+    throttle_classes = [NotificationThrottle]
     def get(self, request):
        
         try:

@@ -5,11 +5,10 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Security settings - use environment variables only
-SECRET_KEY = config('SECRET_KEY')  # REQUIRED - no default
+SECRET_KEY = config('SECRET_KEY')  
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-# Railway provides PORT environment variable
+
 PORT = config('PORT', default=8000, cast=int)
 
 ALLOWED_HOSTS = [
@@ -20,12 +19,12 @@ ALLOWED_HOSTS = [
     '0.0.0.0',
 ]
 
-# Add the host from Railway environment
+
 if 'RAILWAY_STATIC_URL' in os.environ:
     ALLOWED_HOSTS.append(os.environ['RAILWAY_STATIC_URL'])
 
-# Database configuration - ONLY from environment
-DATABASE_URL = config('DATABASE_URL')  # REQUIRED - no default
+
+DATABASE_URL = config('DATABASE_URL')  
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -83,7 +82,7 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'api_gateway.wsgi.application'
 
-# Redis cache configuration - FIXED
+
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
@@ -94,11 +93,11 @@ CACHES = {
     }
 }
 
-# Use Redis for sessions (optional but recommended)
+
 SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
 SESSION_CACHE_ALIAS = 'default'
 
-# RabbitMQ configuration - FIXED
+
 RABBITMQ_URL = config('RABBITMQ_URL', default='amqp://myuser:mypassword@localhost:5672/')
 
 REST_FRAMEWORK = {
@@ -110,7 +109,10 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [],
 }
 
 SPECTACULAR_SETTINGS = {
@@ -130,7 +132,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-# Allow all origins in development for testing
+
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 
@@ -176,7 +178,7 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files configuration for Railway
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

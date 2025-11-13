@@ -21,7 +21,6 @@ class RabbitMQService:
             )
             self.channel = self.connection.channel()
             
-            # Declare exchange
             self.channel.exchange_declare(
                 exchange='notifications.direct', 
                 exchange_type='direct', 
@@ -29,20 +28,19 @@ class RabbitMQService:
             )
             
             try:
-                # Try passive declaration - will fail if queues don't exist
                 self.channel.queue_declare(queue='email.queue', passive=True)
                 self.channel.queue_declare(queue='push.queue', passive=True)
                 self.channel.queue_declare(queue='failed.queue', passive=True)
                 logger.info("Queues already exist, using passive declaration")
             except pika.exceptions.ChannelClosedByBroker as e:
-                if '404' in str(e):  # QUEUE_NOT_FOUND error
-                    # Queues don't exist, create them
+                if '404' in str(e):  
+                    
                     logger.info("Queues not found, creating them...")
                     self.channel.queue_declare(queue='email.queue', durable=True)
                     self.channel.queue_declare(queue='push.queue', durable=True)
                     self.channel.queue_declare(queue='failed.queue', durable=True)
                     
-                    # Bind queues
+                    
                     self.channel.queue_bind(
                         exchange='notifications.direct', 
                         queue='email.queue', 
