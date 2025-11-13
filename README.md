@@ -6,107 +6,71 @@
 
 ## Project Overview
 
-This is the **API Gateway** service for a distributed notification system built as part of Stage 4 Backend Task. The system handles email and push notifications using microservices architecture with asynchronous message processing through RabbitMQ.
+This is the API Gateway service for a distributed notification system built as part of Stage 4 Backend Task. The system handles email and push notifications using microservices architecture with asynchronous message processing through RabbitMQ.
 
 ### Goal
 Build a scalable, fault-tolerant notification system that processes 1,000+ notifications per minute with 99.5% delivery success rate.
 
 ### Team Structure
-- **API Gateway Service** (This repository) - Entry point, request validation, routing
-- **User Service** - User management and preferences (handled by teammates)
-- **Email Service** - Email notification processing (handled by teammates)
-- **Push Service** - Push notification delivery (handled by teammates)
-- **Template Service** - Template management (handled by teammates)
+- API Gateway Service (This repository) - Entry point, request validation, routing
+- User Service - User management and preferences (handled by teammates)
+- Email Service - Email notification processing (handled by teammates)
+- Push Service - Push notification delivery (handled by teammates)
+- Template Service - Template management (handled by teammates)
 
 ## System Architecture
 
 ```
 API Gateway (Django)
-       ↓
+       |
 RabbitMQ (notifications.direct exchange)
-       ├── email.queue → Email Service
-       ├── push.queue → Push Service
-       └── failed.queue → Dead Letter Queue
+       |-- email.queue -> Email Service
+       |-- push.queue -> Push Service
+       |-- failed.queue -> Dead Letter Queue
 ```
 
-## Key Features Implemented
+## API Endpoints Testing
 
-### Core API Gateway Functions
-- **Request Validation** - Comprehensive input validation using Django REST Framework serializers
-- **Message Routing** - Routes notifications to appropriate queues (email/push)
-- **Status Tracking** - Tracks notification lifecycle with database persistence
-- **Idempotency** - Prevents duplicate processing using request IDs
-- **Health Monitoring** - Comprehensive health checks for all dependencies
+### 1. Health Check - Verify System Status
 
-### Advanced Technical Features
-- **Circuit Breaker Pattern** - Prevents cascading failures when downstream services are unavailable
-- **Exponential Backoff Retry** - Automatic retry with configurable backoff strategy
-- **Request Throttling** - Rate limiting to prevent abuse (1000 requests/hour)
-- **Correlation IDs** - End-to-end request tracking for debugging
-- **Comprehensive Logging** - Structured logging with request lifecycle tracking
-
-### Performance & Reliability
-- **Async Processing** - Non-blocking queue operations
-- **Horizontal Scaling** - Stateless design supports multiple instances
-- **Fault Tolerance** - Graceful degradation during service outages
-- **Monitoring Endpoints** - Real-time system status and metrics
-
-## Technology Stack
-
-- **Framework**: Django 4.x + Django REST Framework
-- **Database**: PostgreSQL (Railway)
-- **Message Queue**: RabbitMQ
-- **Cache**: Redis
-- **Containerization**: Docker
-- **Deployment**: Railway
-- **API Documentation**: DRF Spectacular (OpenAPI 3.0)
-
-## Project Structure
-
-```
-api_gateway/
-├── notifications/          # Notification handling app
-│   ├── models.py          # Database models
-│   ├── views.py           # API endpoints
-│   ├── serializers.py     # Request/response validation
-│   ├── services.py        # Business logic & queue handling
-│   ├── middleware.py      # Logging middleware
-│   └── urls.py           # URL routing
-├── health/               # Health check endpoints
-├── settings.py           # Django configuration
-└── urls.py              # Main URL configuration
+```bash
+curl https://distributed-notification-system-production.up.railway.app/health/
 ```
 
-## API Endpoints
-
-### 1. Create Notification
-**POST** `/api/v1/notifications/`
-
-Sends a notification to the appropriate queue (email or push).
-
-**Headers:**
-```http
-Content-Type: application/json
-```
-
-**Request Body:**
+Expected Response:
 ```json
 {
-  "notification_type": "email",
-  "user_id": "123e4567-e89b-12d3-a456-426614174000",
-  "template_code": "welcome_email",
-  "variables": {
-    "name": "John Doe",
-    "link": "https://example.com/verify",
-    "meta": {"source": "web"}
+  "status": "healthy",
+  "checks": {
+    "database": true,
+    "cache": true,
+    "message_queue": true
   },
-  "request_id": "req_123456789",
-  "priority": 1,
-  "metadata": {"campaign": "welcome"}
+  "timestamp": 1705311000.123456
 }
 ```
 
-**Success Response (202 Accepted):**
+### 2. Create Email Notification
+
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "email",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "welcome_email",
+    "variables": {
+      "name": "John Doe",
+      "link": "https://example.com/verify",
+      "meta": {"source": "web"}
+    },
+    "request_id": "req_123456789",
+    "priority": 1,
+    "metadata": {"campaign": "welcome"}
+  }'
+```
+
+Success Response (202):
 ```json
 {
   "success": true,
@@ -118,24 +82,33 @@ Content-Type: application/json
 }
 ```
 
-**Error Response (400 Bad Request):**
-```json
-{
-  "success": false,
-  "error": "Validation failed",
-  "message": "Invalid request data",
-  "data": {
-    "notification_type": ["This field is required."]
-  }
-}
+### 3. Create Push Notification
+
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "push",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "welcome_push",
+    "variables": {
+      "name": "Jane Smith",
+      "link": "https://example.com/app",
+      "meta": {"device": "mobile"}
+    },
+    "request_id": "req_987654321",
+    "priority": 2,
+    "metadata": {"platform": "ios"}
+  }'
 ```
 
-### 2. List Notifications
-**GET** `/api/v1/notifications/`
+### 4. List All Notifications
 
-Retrieves paginated list of notifications.
+```bash
+curl https://distributed-notification-system-production.up.railway.app/api/v1/notifications/
+```
 
-**Response:**
+Expected Response:
 ```json
 {
   "success": true,
@@ -163,22 +136,20 @@ Retrieves paginated list of notifications.
 }
 ```
 
-### 3. Update Notification Status
-**POST** `/api/v1/notifications/{notification_type}/status/`
+### 5. Update Notification Status
 
-Updates the status of a notification (used by worker services).
-
-**Request Body:**
-```json
-{
-  "notification_id": "req_123456789",
-  "status": "delivered",
-  "timestamp": "2024-01-15T10:35:00Z",
-  "error": null
-}
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/email/status/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_id": "req_123456789",
+    "status": "delivered",
+    "timestamp": "2024-01-15T10:35:00Z",
+    "error": null
+  }'
 ```
 
-**Response:**
+Expected Response:
 ```json
 {
   "success": true,
@@ -186,30 +157,13 @@ Updates the status of a notification (used by worker services).
 }
 ```
 
-### 4. Health Check
-**GET** `/health/`
+### 6. Check Circuit Breaker Status
 
-Checks the health of all dependencies.
-
-**Response:**
-```json
-{
-  "status": "healthy",
-  "checks": {
-    "database": true,
-    "cache": true,
-    "message_queue": true
-  },
-  "timestamp": 1705311000.123456
-}
+```bash
+curl https://distributed-notification-system-production.up.railway.app/api/v1/circuit-breakers/
 ```
 
-### 5. Circuit Breaker Status
-**GET** `/api/v1/circuit-breakers/`
-
-Returns the current state of all circuit breakers.
-
-**Response:**
+Expected Response:
 ```json
 {
   "success": true,
@@ -233,12 +187,13 @@ Returns the current state of all circuit breakers.
 }
 ```
 
-### 6. Reset Circuit Breaker
-**POST** `/api/v1/circuit-breakers/{breaker_name}/reset/`
+### 7. Reset Circuit Breaker
 
-Manually resets a circuit breaker.
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/circuit-breakers/rabbitmq/reset/
+```
 
-**Response:**
+Expected Response:
 ```json
 {
   "success": true,
@@ -246,69 +201,114 @@ Manually resets a circuit breaker.
 }
 ```
 
-## Technical Implementation Details
+### 8. Test Duplicate Request Protection
 
-### Circuit Breaker Pattern
-The system implements circuit breakers for:
-- **RabbitMQ connections** - Prevents queue overload when MQ is down
-- **Database operations** - Protects database from cascading failures
-
-**States:**
-- `CLOSED`: Normal operation
-- `OPEN`: Service unavailable, requests blocked
-- `HALF_OPEN`: Testing if service recovered
-
-### Retry System
-- **Exponential backoff** with jitter
-- **Configurable retry attempts** (default: 3)
-- **Automatic failure detection**
-- **Dead letter queue** for permanent failures
-
-### Idempotency
-- **Request ID validation** prevents duplicate processing
-- **Cache + Database storage** for idempotency keys
-- **24-hour TTL** for idempotency records
-
-### Monitoring & Observability
-- **Structured logging** with correlation IDs
-- **Health endpoints** for all dependencies
-- **Performance metrics** tracking
-- **Error rate monitoring**
-
-## Deployment & Environment
-
-### Environment Variables
+First request:
 ```bash
-SECRET_KEY=your-secret-key
-DEBUG=False
-DATABASE_URL=postgresql://user:pass@host:port/db
-REDIS_URL=redis://host:port/db
-RABBITMQ_URL=amqp://user:pass@host:port/vhost
-PORT=8000
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "email",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "test_duplicate",
+    "variables": {
+      "name": "Test User",
+      "link": "https://example.com"
+    },
+    "request_id": "duplicate_test_123",
+    "priority": 1
+  }'
 ```
 
-### Running Locally
+Second request (same request_id):
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run migrations
-python manage.py migrate
-
-# Start server
-python manage.py runserver
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "email",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "test_duplicate",
+    "variables": {
+      "name": "Test User",
+      "link": "https://example.com"
+    },
+    "request_id": "duplicate_test_123",
+    "priority": 1
+  }'
 ```
 
-## Performance Metrics
+Both requests return the same response, preventing duplicate processing.
 
-- **API Response Time**: < 100ms
-- **Throughput**: 1,000+ notifications/minute
-- **Success Rate**: 99.5%+
-- **Availability**: 99.9%+
+### 9. Test Validation Errors
 
-## Testing Endpoints
+Missing required field:
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "test_template",
+    "variables": {
+      "name": "Test User",
+      "link": "https://example.com"
+    },
+    "request_id": "test_123"
+  }'
+```
 
-### Test Notification Creation
+Expected Error Response (400):
+```json
+{
+  "success": false,
+  "error": "Validation failed",
+  "message": "Invalid request data",
+  "data": {
+    "notification_type": ["This field is required."]
+  }
+}
+```
+
+### 10. Test with Invalid Data
+
+Invalid notification type:
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "sms",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "test_template",
+    "variables": {
+      "name": "Test User",
+      "link": "https://example.com"
+    },
+    "request_id": "test_456",
+    "priority": 1
+  }'
+```
+
+Expected Error Response (400):
+```json
+{
+  "success": false,
+  "error": "Validation failed",
+  "message": "Invalid request data",
+  "data": {
+    "notification_type": ["\"sms\" is not a valid choice."]
+  }
+}
+```
+
+## Complete Test Sequence
+
+Run these commands in order to test the full functionality:
+
+1. Check system health:
+```bash
+curl https://distributed-notification-system-production.up.railway.app/health/
+```
+
+2. Send a test email notification:
 ```bash
 curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
   -H "Content-Type: application/json" \
@@ -325,33 +325,62 @@ curl -X POST https://distributed-notification-system-production.up.railway.app/a
   }'
 ```
 
-### Check Health Status
+3. View all notifications:
 ```bash
-curl https://distributed-notification-system-production.up.railway.app/health/
+curl https://distributed-notification-system-production.up.railway.app/api/v1/notifications/
 ```
 
-### View API Documentation
-Visit: https://distributed-notification-system-production.up.railway.app/api/docs/
+4. Check circuit breaker status:
+```bash
+curl https://distributed-notification-system-production.up.railway.app/api/v1/circuit-breakers/
+```
 
+5. Test duplicate protection (run twice with same request_id):
+```bash
+curl -X POST https://distributed-notification-system-production.up.railway.app/api/v1/notifications/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "notification_type": "email",
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "template_code": "duplicate_test",
+    "variables": {
+      "name": "Duplicate Test",
+      "link": "https://example.com"
+    },
+    "request_id": "duplicate_123",
+    "priority": 1
+  }'
+```
 
-## Learning Outcomes
+## Technology Stack
 
-This implementation demonstrates:
+- Framework: Django 4.x + Django REST Framework
+- Database: PostgreSQL (Railway)
+- Message Queue: RabbitMQ
+- Cache: Redis
+- Containerization: Docker
+- Deployment: Railway
+- API Documentation: DRF Spectacular (OpenAPI 3.0)
 
-- **Microservices decomposition** and service boundaries
-- **Asynchronous messaging patterns** with RabbitMQ
-- **Distributed system failure handling** with circuit breakers
-- **Event-driven architecture design**
-- **Scalable and fault-tolerant system design**
-- **Team collaboration** in distributed systems
+## Key Features
 
-##  Support
+- Request Validation - Comprehensive input validation
+- Message Routing - Routes to appropriate queues (email/push)
+- Status Tracking - Tracks notification lifecycle
+- Idempotency - Prevents duplicate processing
+- Circuit Breaker Pattern - Prevents cascading failures
+- Exponential Backoff Retry - Automatic retry with backoff
+- Request Throttling - Rate limiting (1000 requests/hour)
+- Health Monitoring - Comprehensive health checks
+- Correlation IDs - End-to-end request tracking
 
-For issues or questions:
-1. Check the API documentation: `/api/docs/`
-2. Verify health status: `/health/`
-3. Review logs for correlation IDs in error responses
+## Performance Metrics
 
----
+- API Response Time: < 100ms
+- Throughput: 1,000+ notifications/minute
+- Success Rate: 99.5%+
+- Availability: 99.9%+
 
-**Built with ❤️ for Stage 4 Backend Task - Distributed Notification System**
+For full API documentation, visit: https://distributed-notification-system-production.up.railway.app/api/docs/
+
+Built for Stage 4 Backend Task - Distributed Notification System
