@@ -23,23 +23,34 @@ class NotificationPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-        return APIResponseSerializer({
+      
+        meta_data = {
+            'total': self.page.paginator.count,
+            'limit': self.get_page_size(self.request),
+            'page': self.page.number,
+            'total_pages': self.page.paginator.num_pages,
+            'has_next': self.page.has_next(),
+            'has_previous': self.page.has_previous(),
+        }
+        
+        
+        meta_serializer = PaginationMetaSerializer(meta_data)
+        
+       
+        response_data = {
             'success': True,
             'data': data,
             'message': 'Notifications retrieved successfully',
-            'meta': PaginationMetaSerializer({
-                'total': self.page.paginator.count,
-                'limit': self.get_page_size(self.request),
-                'page': self.page.number,
-                'total_pages': self.page.paginator.num_pages,
-                'has_next': self.page.has_next(),
-                'has_previous': self.page.has_previous(),
-            }).data
-        }).data
+            'meta': meta_serializer.data
+        }
+        
+       
+        final_serializer = APIResponseSerializer(response_data)
+        return Response(final_serializer.data)
 
 class NotificationView(APIView):
     def get(self, request):
-        """List all notifications"""
+       
         try:
             paginator = NotificationPagination()
             notifications = Notification.objects.all().order_by('-created_at')
@@ -60,7 +71,7 @@ class NotificationView(APIView):
             )
 
     def post(self, request):
-        """Create a new notification"""
+        
         try:
             serializer = NotificationCreateSerializer(data=request.data)
             if not serializer.is_valid():
@@ -121,7 +132,7 @@ class NotificationView(APIView):
 
 @api_view(['POST'])
 def update_notification_status(request, notification_type):
-    """Update notification status"""
+   
     try:
         serializer = NotificationStatusUpdateSerializer(data=request.data)
         if not serializer.is_valid():
