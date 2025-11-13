@@ -1,10 +1,11 @@
+# views.py - Final cleaned version
 import logging
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from django.core.cache import cache
+from django.core.exceptions import ObjectDoesNotExist
 from .models import Notification
 from .serializers import (
     NotificationCreateSerializer,
@@ -13,10 +14,11 @@ from .serializers import (
     APIResponseSerializer,
     PaginationMetaSerializer
 )
-from .services import NotificationService, CircuitBreaker
+from .services import NotificationService, circuit_breaker_manager, CircuitBreakerError
 from rest_framework.throttling import UserRateThrottle
 
 logger = logging.getLogger('notifications')
+
 
 class NotificationPagination(PageNumberPagination):
     page_size = 20
@@ -38,13 +40,15 @@ class NotificationPagination(PageNumberPagination):
             }
         })
 
+
 class NotificationThrottle(UserRateThrottle):
     rate = '1000/hour'
-    
+
+
 class NotificationView(APIView):
     throttle_classes = [NotificationThrottle]
+    
     def get(self, request):
-       
         try:
             paginator = NotificationPagination()
             notifications = Notification.objects.all().order_by('-created_at')
@@ -54,7 +58,7 @@ class NotificationView(APIView):
             return paginator.get_paginated_response(serializer.data)
             
         except Exception as e:
-            logger.error(f"Error listing notifications: {str(e)}")
+            logger.error("Error listing notifications: %s", str(e))
             return Response(
                 APIResponseSerializer({
                     'success': False,
@@ -65,7 +69,6 @@ class NotificationView(APIView):
             )
 
     def post(self, request):
-        
         try:
             serializer = NotificationCreateSerializer(data=request.data)
             if not serializer.is_valid():
@@ -85,7 +88,7 @@ class NotificationView(APIView):
             notification_service = NotificationService()
             existing_response = notification_service.check_idempotency(request_id)
             if existing_response:
-                logger.info(f"Idempotent request detected: {request_id}")
+                logger.info("Idempotent request detected: %s", request_id)
                 return Response(existing_response)
             
             success = notification_service.send_notification(data)
@@ -107,14 +110,14 @@ class NotificationView(APIView):
                 return Response(
                     APIResponseSerializer({
                         'success': False,
-                        'error': 'Queueing failed',
-                        'message': 'Failed to queue notification'
+                        'error': 'Service unavailable',
+                        'message': 'Failed to queue notification. Service may be temporarily unavailable.'
                     }).data,
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE
                 )
                 
         except Exception as e:
-            logger.error(f"Error creating notification: {str(e)}")
+            logger.error("Error creating notification: %s", str(e))
             return Response(
                 APIResponseSerializer({
                     'success': False,
@@ -124,9 +127,9 @@ class NotificationView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
+
 @api_view(['POST'])
 def update_notification_status(request, notification_type):
-   
     try:
         serializer = NotificationStatusUpdateSerializer(data=request.data)
         if not serializer.is_valid():
@@ -147,7 +150,7 @@ def update_notification_status(request, notification_type):
             notification.status = data['status']
             notification.save()
             
-            logger.info(f"Notification {notification_id} status updated to {data['status']}")
+            logger.info("Notification %s status updated to %s", notification_id, data['status'])
             
             return Response(
                 APIResponseSerializer({
@@ -156,7 +159,7 @@ def update_notification_status(request, notification_type):
                 }).data
             )
             
-        except Notification.DoesNotExist:
+        except ObjectDoesNotExist:
             return Response(
                 APIResponseSerializer({
                     'success': False,
@@ -167,7 +170,7 @@ def update_notification_status(request, notification_type):
             )
             
     except Exception as e:
-        logger.error(f"Error updating notification status: {str(e)}")
+        logger.error("Error updating notification status: %s", str(e))
         return Response(
             APIResponseSerializer({
                 'success': False,
@@ -176,3 +179,67 @@ def update_notification_status(request, notification_type):
             }).data,
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+# Circuit Breaker Monitoring Endpoints
+@api_view(['GET'])
+def circuit_breaker_status(request):
+    """Get current status of all circuit breakers"""
+    states = circuit_breaker_manager.get_all_states()
+    
+    return Response({
+        'success': True,
+        'data': states,
+        'message': 'Circuit breaker status retrieved successfully'
+    })
+
+
+@api_view(['POST'])
+def reset_circuit_breaker(request, breaker_name):
+    """Reset a specific circuit breaker"""
+    try:
+        circuit_breaker_manager.reset_breaker(breaker_name)
+        return Response({
+            'success': True,
+            'message': f'Circuit breaker {breaker_name} reset successfully'
+        })
+    except KeyError:
+        return Response({
+            'success': False,
+            'error': 'Not found',
+            'message': f'Circuit breaker {breaker_name} not found'
+        }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['POST'])
+def simulate_failure(request, breaker_name):
+    """Simulate failures to test circuit breaker (for testing only)"""
+    from django.conf import settings
+    
+    if not settings.DEBUG:
+        return Response({
+            'success': False,
+            'error': 'Not allowed',
+            'message': 'Failure simulation only allowed in DEBUG mode'
+        }, status=status.HTTP_403_FORBIDDEN)
+    
+    try:
+        breaker = circuit_breaker_manager.get_breaker(breaker_name)
+        # Simulate multiple failures to trigger circuit breaker
+        for i in range(breaker.failure_threshold + 1):
+            try:
+                breaker.call(lambda: 1/0)  # Always fails
+            except (CircuitBreakerError, ZeroDivisionError):
+                pass
+        
+        return Response({
+            'success': True,
+            'message': f'Simulated failures for {breaker_name}. Circuit breaker should be OPEN now.',
+            'data': breaker.get_state()
+        })
+    except KeyError:
+        return Response({
+            'success': False,
+            'error': 'Not found', 
+            'message': f'Circuit breaker {breaker_name} not found'
+        }, status=status.HTTP_404_NOT_FOUND)
