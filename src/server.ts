@@ -1,59 +1,78 @@
-// src/server.ts
 import Fastify from 'fastify';
-import { publish } from './queue/rabbit';
-import { runConsumer } from './consumer-run';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
 import health from './routes/health';
 import metrics from './routes/metrics';
 import statusRoutes from './routes/status/id';
 import metricsIdRoutes from './routes/metrics/id';
+import { publish } from './queue/rabbit';
+import { runConsumer } from './consumer-run';
 
 async function start() {
   const fastify = Fastify({ logger: true });
 
-  // === REGISTER ROUTES ===
-  fastify.register(health);
-  fastify.register(metrics);
-  fastify.register(statusRoutes);
-  fastify.register(metricsIdRoutes, { prefix: '/metrics' });
+  // Register routes first
+  await fastify.register(health);
+  await fastify.register(metrics);
+  await fastify.register(statusRoutes);
+  await fastify.register(metricsIdRoutes, { prefix: '/metrics' });
 
-  // === /api/push ENDPOINT ===
-  fastify.post('/api/push', async (request, reply) => {
-    const body = request.body as any;
-    const { request_id, recipient_id, device_token, payload } = body;
-
-    if (!request_id || !recipient_id || !device_token || !payload?.title || !payload?.body) {
-      return reply.status(400).send({
-        error: 'Missing required fields',
-        required: ['request_id', 'recipient_id', 'device_token', 'payload.title', 'payload.body'],
-      });
-    }
-
-    try {
-      const channel = fastify.rabbitChannel; // Now safe
-      if (!channel) throw new Error('RabbitMQ channel not ready');
-      await publish(channel, process.env.PUSH_QUEUE!, body);
-      return reply.send({ status: 'queued', request_id });
-    } catch (err: any) {
-      fastify.log.error({ err }, 'Failed to publish');
-      return reply.status(500).send({ error: 'Failed to queue' });
-    }
+  // Then register Swagger
+  await fastify.register(swagger, {
+    openapi: {
+      info: {
+        title: 'Push Service API',
+        version: '1.0.0',
+      },
+    },
   });
 
-  // === START RABBITMQ CONSUMER FIRST ===
-  let rabbitChannel: any;
-  try {
-    rabbitChannel = await runConsumer(); // Returns channel
-    fastify.decorate('rabbitChannel', rabbitChannel); // SAFE: before listen
-    fastify.log.info('Consumer started and channel ready');
-  } catch (err: any) {
-    fastify.log.error({ err }, 'Consumer failed to start');
-    // Continue — API still works, just no consumer
-  }
+  await fastify.register(swaggerUi, {
+    routePrefix: '/docs',
+    uiConfig: { docExpansion: 'list' },
+  });
 
-  // === START SERVER ===
-  const PORT = parseInt(process.env.PORT || '4001', 10);
-  await fastify.listen({ port: PORT, host: '0.0.0.0' });
-  fastify.log.info(`API: http://0.0.0.0:${PORT}/api/push`);
+  // Register push endpoint with schema
+  fastify.post('/api/push', {
+    schema: {
+      summary: 'Queue a new push notification',
+      body: {
+        type: 'object',
+        required: ['request_id', 'recipient_id', 'device_token', 'payload'],
+        properties: {
+          request_id: { type: 'string' },
+          recipient_id: { type: 'string' },
+          device_token: { type: 'string' },
+          payload: {
+            type: 'object',
+            required: ['title', 'body'],
+            properties: {
+              title: { type: 'string' },
+              body: { type: 'string' },
+            },
+          },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            status: { type: 'string' },
+            request_id: { type: 'string' },
+          },
+        },
+      },
+    },
+  }, async (req, reply) => {
+    const body = req.body as any;
+    await publish(fastify.rabbitChannel, process.env.PUSH_QUEUE!, body);
+    return { status: 'queued', request_id: body.request_id };
+  });
+
+  const channel = await runConsumer();
+  fastify.decorate('rabbitChannel', channel);
+
+  await fastify.listen({ port: 4001, host: '0.0.0.0' });
 }
 
 declare module 'fastify' {
@@ -62,7 +81,4 @@ declare module 'fastify' {
   }
 }
 
-start().catch(err => {
-  console.error('Server crashed:', err);
-  process.exit(1);
-});
+start();

@@ -1,22 +1,55 @@
-version: '3.8'
+# docker-compose.yml
+
 services:
   rabbitmq:
     image: rabbitmq:3-management
-    ports: ["5672:5672","15672:15672"]
+    ports:
+      - "5673:5672"      # Host:5673 → Container:5672
+      - "15673:15672"    # Management UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
   redis:
-    image: redis:7
-    ports: ["6379:6379"]
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"      # Host:6380 → Container:6379
+
   postgres:
     image: postgres:15
     environment:
       POSTGRES_PASSWORD: xyler23
       POSTGRES_DB: pushdb
-    ports: ["5434:5434"]
+    ports:
+      - "5433:5434"      # Host:5433 → Container:5432
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
   push-service:
     build: .
+    ports:
+      - "4001:4001"
     environment:
-      - RABBIT_URL=amqp://rabbitmq:5672
-      - POSTGRES_URL=postgres://postgres:xyler23@postgres:5434/push
-      - REDIS_URL=redis://default:qsoXJWpuZYZXzSpslBdRWLDyTAyCYVVg@yamabiko.proxy.rlwy.net:21006
-      - FCM_SERVICE_ACCOUNT_PATH=/secrets/firebase-admin.json
-    depends_on: [rabbitmq, redis, postgres]
+      # LOCAL URLs (for docker-compose) - FCM_SERVICE_ACCOUNT_PATH=/secrets/serviceAccountKey.json
+      - HOST=0.0.0.0
+      - NODE_ENV=development
+      - PORT=4001
+      - RABBIT_URL=amqp://guest:guest@rabbitmq:5672
+      - POSTGRES_URL=postgres://postgres:xyler23@postgres:5434/pushdb
+      - REDIS_URL=redis://redis:6379
+      - MAX_RETRIES=5
+    volumes:
+      - ./secrets:/app/secrets:ro
+      - ./logs:/app/logs
+    depends_on:
+      - rabbitmq
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:4001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:

@@ -9,7 +9,9 @@ const queue = process.env.PUSH_QUEUE || 'push_queue';
 export default async function health(fastify: FastifyInstance) {
   fastify.get('/health', {
     schema: {
+      tags: ['Health'],
       summary: 'Check service health',
+      description: 'Returns the health status of the push service and RabbitMQ queue.',
       response: {
         200: {
           type: 'object',

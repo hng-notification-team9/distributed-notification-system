@@ -12,7 +12,7 @@ async function main() {
   const msg = {
     request_id: `test-${Date.now()}`,
     recipient_id: 'user-123',
-    device_token: 'fcm-dummy-token-123',  // REQUIRED
+    device_token: 'fcm-dummy-token-123', 
     payload: {
       title: 'Hello from Template!',
       body: 'Your order ORD-999 is ready.',
