@@ -23,30 +23,19 @@ class NotificationPagination(PageNumberPagination):
     max_page_size = 100
 
     def get_paginated_response(self, data):
-      
-        meta_data = {
-            'total': self.page.paginator.count,
-            'limit': self.get_page_size(self.request),
-            'page': self.page.number,
-            'total_pages': self.page.paginator.num_pages,
-            'has_next': self.page.has_next(),
-            'has_previous': self.page.has_previous(),
-        }
-        
-        
-        meta_serializer = PaginationMetaSerializer(meta_data)
-        
-       
-        response_data = {
+        return Response({
             'success': True,
             'data': data,
             'message': 'Notifications retrieved successfully',
-            'meta': meta_serializer.data
-        }
-        
-       
-        final_serializer = APIResponseSerializer(response_data)
-        return Response(final_serializer.data)
+            'meta': {
+                'total': self.page.paginator.count,
+                'limit': self.get_page_size(self.request),
+                'page': self.page.number,
+                'total_pages': self.page.paginator.num_pages,
+                'has_next': self.page.has_next(),
+                'has_previous': self.page.has_previous(),
+            }
+        })
 
 class NotificationView(APIView):
     def get(self, request):
