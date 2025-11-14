@@ -11,6 +11,7 @@ let retryCount = 0;
 export default async function metricsIdRoutes(fastify: FastifyInstance) {
   fastify.get('/metrics/:id', {
     schema: {
+        tags: ['Metrics'],
       summary: 'Get push metrics for a specific request ID',
       params: {
         type: 'object',

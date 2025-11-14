@@ -5,6 +5,7 @@ import { pg, redis } from '../db/postgres';
 export default async function (fastify: FastifyInstance) {
   fastify.get('/metrics', {
     schema: {
+      tags: ['Metrics'],
       summary: 'Get push service metrics',
       response: {
         200: {

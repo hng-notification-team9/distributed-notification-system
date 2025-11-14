@@ -5,6 +5,7 @@ import { pg } from '../../db/postgres';
 export default async function statusRoutes(fastify: FastifyInstance) {
   fastify.get('/status/:id', {
     schema: {
+        tags: ['Status'],
       summary: 'Check notification status by request ID',
       params: {
         type: 'object',

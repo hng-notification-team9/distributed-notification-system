@@ -30,13 +30,14 @@ services:
     ports:
       - "4001:4001"
     environment:
-      # LOCAL URLs (for docker-compose) - FCM_SERVICE_ACCOUNT_PATH=/secrets/serviceAccountKey.json
+      # LOCAL URLs (for docker-compose)
       - HOST=0.0.0.0
       - NODE_ENV=development
       - PORT=4001
       - RABBIT_URL=amqp://guest:guest@rabbitmq:5672
       - POSTGRES_URL=postgres://postgres:xyler23@postgres:5434/pushdb
       - REDIS_URL=redis://redis:6379
+      - FCM_SERVICE_ACCOUNT_PATH=/app/secrets/firebase-admin.json
       - MAX_RETRIES=5
     volumes:
       - ./secrets:/app/secrets:ro

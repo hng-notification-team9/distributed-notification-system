@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import fp from 'fastify-plugin';
 import amqplib from 'amqplib';
 import { allowRequest, recordFailure, reset } from '../services/circuit_breaker';
 import { redis } from '../db/postgres';
@@ -6,7 +7,7 @@ import { redis } from '../db/postgres';
 const rabbitUrl = process.env.RABBIT_URL || 'amqp://localhost';
 const queue = process.env.PUSH_QUEUE || 'push_queue';
 
-export default async function health(fastify: FastifyInstance) {
+async function health(fastify: FastifyInstance) {
   fastify.get('/health', {
     schema: {
       tags: ['Health'],
@@ -65,3 +66,5 @@ export default async function health(fastify: FastifyInstance) {
     }
   });
 }
+
+export default fp(health);

@@ -5,6 +5,7 @@ import { publish } from './rabbit';
 import { sendPush } from '../services/fcm_sender';
 import { backoffMs } from '../utils/backoff';
 import type { Channel } from 'amqplib';
+import { statusState } from '../routes/status'; 
 
 export interface PushMessage {
   request_id: string;
@@ -113,41 +114,51 @@ export async function startConsumer(ch: Channel) {
         await redis.set(redisKey, 'sent', 'EX', idempotencyTTL);
 
         logger.info({ request_id }, 'Push delivered');
+        statusState.consumerActive = true;
+        statusState.lastProcessedId = request_id;
+        statusState.lastProcessedAt = new Date().toISOString();
         ch.ack(msg);
       } catch (err: any) {
         logger.error({ err, request_id, attempts }, 'Push failed');
 
-        if (attempts < maxRetries) {
-          const delay = backoffMs(attempts);
-          setTimeout(() => {
-            try { publish(ch, queue, body, { headers: { attempts: attempts + 1 } }); }
-            catch (e) { logger.error({ e }, 'Retry failed'); }
-          }, delay);
+        if (attempts >= maxRetries) {
+          // === FINAL FAILURE (stop retries completely) ===
+          try {
+            await pg.query(
+              `UPDATE notifications 
+               SET status='failed', last_error=$1, attempts=$2, updated_at=now()
+               WHERE request_id=$3`,
+              [err.message, attempts, request_id]
+            );
+          } catch (dbErr) {
+            logger.error({ dbErr }, 'DB update failed on final failure');
+          }
+
+          try {
+            await publish(ch, failedQueue, {
+              ...body,
+              last_error: err.message,
+              failed_at: new Date().toISOString(),
+            });
+            logger.info({ request_id }, 'Moved to failed.queue after max retries');
+          } catch (pubErr) {
+            logger.error({ pubErr, request_id }, 'Failed to publish to failed.queue');
+          }
+
           ch.ack(msg);
           return;
         }
 
-        // === FINAL FAILURE ===
-        try {
-          await pg.query(
-            `UPDATE notifications SET status='failed', last_error=$1, attempts=$2 WHERE request_id=$3`,
-            [err.message, attempts, request_id]
-          );
-        } catch (dbErr) {
-          logger.error({ dbErr }, 'DB update failed');
-        }
-
-        // === SEND TO failed.queue (NO DLX) ===
-        try {
-          await publish(ch, failedQueue, {
-            ...body,
-            last_error: err.message,
-            failed_at: new Date().toISOString(),
-          });
-          logger.info({ request_id }, 'Sent to failed.queue');
-        } catch (pubErr) {
-          logger.error({ pubErr, request_id }, 'Failed to publish to failed.queue');
-        }
+        // === Retry with backoff if still below max ===
+        const delay = backoffMs(attempts);
+        setTimeout(() => {
+          try {
+            publish(ch, queue, body, { headers: { attempts: attempts + 1 } });
+            logger.info({ request_id, next_attempt: attempts + 1 }, `Retry scheduled after ${delay}ms`);
+          } catch (e) {
+            logger.error({ e }, 'Retry publish failed');
+          }
+        }, delay);
 
         ch.ack(msg);
       }
