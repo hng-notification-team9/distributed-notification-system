@@ -5,11 +5,10 @@ import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Security settings - use environment variables only
-SECRET_KEY = config('SECRET_KEY')  # REQUIRED - no default
+SECRET_KEY = config('SECRET_KEY')  
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-# Railway provides PORT environment variable
+
 PORT = config('PORT', default=8000, cast=int)
 
 ALLOWED_HOSTS = [
@@ -20,12 +19,12 @@ ALLOWED_HOSTS = [
     '0.0.0.0',
 ]
 
-# Add the host from Railway environment
+
 if 'RAILWAY_STATIC_URL' in os.environ:
     ALLOWED_HOSTS.append(os.environ['RAILWAY_STATIC_URL'])
 
-# Database configuration - ONLY from environment
-DATABASE_URL = config('DATABASE_URL')  # REQUIRED - no default
+
+DATABASE_URL = config('DATABASE_URL')  
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -83,29 +82,23 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'api_gateway.wsgi.application'
 
-# Cache configuration - fallback to local memory if Redis not available
-REDIS_URL = config('REDIS_URL', default=None)
-if REDIS_URL and 'redis://' in REDIS_URL:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': REDIS_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            }
-        }
-    }
-else:
-    # Fallback to local memory cache
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-            'LOCATION': 'api-gateway-cache',
-        }
-    }
 
-# RabbitMQ configuration
-RABBITMQ_URL = config('RABBITMQ_URL', default=None)
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': config('REDIS_URL', default='redis://127.0.0.1:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+        }
+    }
+}
+
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+SESSION_CACHE_ALIAS = 'default'
+
+
+RABBITMQ_URL = config('RABBITMQ_URL', default='amqp://myuser:mypassword@localhost:5672/')
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
@@ -116,7 +109,10 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    
+    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [],
 }
 
 SPECTACULAR_SETTINGS = {
@@ -136,7 +132,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:3000",
 ]
 
-# Allow all origins in development for testing
+
 if DEBUG:
     CORS_ALLOW_ALL_ORIGINS = True
 
@@ -182,17 +178,9 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
-# Static files configuration for Railway
+
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# Security settings for production
-if not DEBUG:
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
