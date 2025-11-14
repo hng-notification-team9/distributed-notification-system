@@ -15,6 +15,7 @@ from .serializers import (
 )
 from .services import NotificationService, circuit_breaker_manager, CircuitBreakerError
 from rest_framework.throttling import UserRateThrottle
+from drf_yasg.utils import swagger_auto_schema
 
 logger = logging.getLogger('notifications')
 
@@ -127,6 +128,11 @@ class NotificationView(APIView):
             )
 
 
+
+@swagger_auto_schema(
+    method='post',
+    request_body=NotificationStatusUpdateSerializer
+)
 @api_view(['POST'])
 def update_notification_status(request, notification_type):
     try:
