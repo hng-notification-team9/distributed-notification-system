@@ -1,41 +1,28 @@
 // src/services/fcm_sender.ts
 import admin from 'firebase-admin';
 import { logger } from '../logger';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { dirname, resolve } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Required environment variables
+const {
+  FIREBASE_PROJECT_ID,
+  FIREBASE_PRIVATE_KEY,
+  FIREBASE_CLIENT_EMAIL,
+} = process.env;
 
-const defaultPath = resolve(__dirname, '../../secrets/serviceAccountKey.json');
-const serviceAccountPath = process.env.FCM_SERVICE_ACCOUNT_PATH || defaultPath;
-
-let serviceAccount: any;
-
-try {
-  // THIS IS THE FIX — pathToFileURL works on Windows + Linux + Railway
-  const fileUrl = pathToFileURL(serviceAccountPath).href;
-
-  const module = await import(fileUrl, { assert: { type: 'json' } });
-  serviceAccount = module.default;
-
-  logger.info('FCM service account loaded successfully');
-} catch (err: any) {
-  logger.error(
-    { err: err.message, path: serviceAccountPath },
-    'Failed to load FCM service account'
-  );
-  throw new Error(
-    `FCM service account not found!\n` +
-    `Expected at: ${serviceAccountPath}\n` +
-    `Make sure the file exists and path is correct.`
-  );
+if (!FIREBASE_PROJECT_ID || !FIREBASE_PRIVATE_KEY || !FIREBASE_CLIENT_EMAIL) {
+  throw new Error('Firebase environment variables are missing');
 }
 
-// Initialize Firebase
+// Convert escaped newlines to actual newlines
+const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+
 if (!admin.apps.length) {
   admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
+    credential: admin.credential.cert({
+      projectId: FIREBASE_PROJECT_ID,
+      clientEmail: FIREBASE_CLIENT_EMAIL,
+      privateKey,
+    }),
   });
   logger.info('Firebase Admin initialized');
 }

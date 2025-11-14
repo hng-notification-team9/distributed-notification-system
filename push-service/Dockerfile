@@ -1,5 +1,5 @@
 # Dockerfile
-FROM node:22-alpine AS base
+FROM node:20-slim AS base
 
 # Install TypeScript for build
 RUN npm install -g typescript
@@ -13,7 +13,7 @@ COPY src ./src
 RUN npm run build
 
 # Production stage
-FROM node:22-alpine AS production
+FROM node:20-slim AS production
 WORKDIR /app
 
 # Copy built app
@@ -25,6 +25,6 @@ COPY .env.example ./.env
 EXPOSE 4001
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:4001/health || exit 1
+  CMD curl --fail http://localhost:4001/health || exit 1
 
 CMD ["node", "dist/server.js"]
