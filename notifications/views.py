@@ -16,6 +16,7 @@ from .serializers import (
 from .services import NotificationService, circuit_breaker_manager, CircuitBreakerError
 from rest_framework.throttling import UserRateThrottle
 from drf_yasg.utils import swagger_auto_schema
+from drf_yasg import openapi
 
 logger = logging.getLogger('notifications')
 
@@ -129,10 +130,21 @@ class NotificationView(APIView):
 
 
 
+notification_type_param = openapi.Parameter(
+    'notification_type',
+    openapi.IN_PATH,
+    description="Notification type (email or push)",
+    type=openapi.TYPE_STRING,
+    required=True
+)
+
 @swagger_auto_schema(
     method='post',
-    request_body=NotificationStatusUpdateSerializer
+    manual_parameters=[notification_type_param],
+    request_body=NotificationStatusUpdateSerializer,
+    responses={200: APIResponseSerializer()}
 )
+
 @api_view(['POST'])
 def update_notification_status(request, notification_type):
     try:
