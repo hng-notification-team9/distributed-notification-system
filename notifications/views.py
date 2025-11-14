@@ -17,6 +17,7 @@ from .services import NotificationService, circuit_breaker_manager, CircuitBreak
 from rest_framework.throttling import UserRateThrottle
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from drf_spectacular.utils import extend_schema, OpenApiExample
 
 logger = logging.getLogger('notifications')
 
@@ -131,16 +132,18 @@ class NotificationView(APIView):
 
 
 class NotificationStatusUpdateView(APIView):
-    @swagger_auto_schema(
-        request_body=NotificationStatusUpdateSerializer,
-        responses={200: APIResponseSerializer()},
-        manual_parameters=[
-            openapi.Parameter(
-                'notification_type',
-                openapi.IN_PATH,
-                description="Notification type (email or push)",
-                type=openapi.TYPE_STRING,
-                required=True
+    @extend_schema(
+        request=NotificationStatusUpdateSerializer,
+        examples=[
+            OpenApiExample(
+                'Status Update Example',
+                value={
+                    "notification_id": "req_123456789",
+                    "status": "delivered",
+                    "timestamp": "2024-01-15T10:35:00Z",
+                    "error": None
+                },
+                request_only=True
             )
         ]
     )
