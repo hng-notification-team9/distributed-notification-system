@@ -45,7 +45,6 @@ class NotificationPagination(PageNumberPagination):
 class NotificationThrottle(UserRateThrottle):
     rate = '1000/hour'
 
-
 class NotificationView(APIView):
     throttle_classes = [NotificationThrottle]
     
