@@ -156,33 +156,27 @@ class RabbitMQService:
             )
             self.channel = self.connection.channel()
             
+            
             self.channel.exchange_declare(
                 exchange='notifications.direct', 
                 exchange_type='direct', 
                 durable=True
             )
             
-           
+            
             queues = ['email.queue', 'push.queue', 'failed.queue']
             for queue in queues:
-                try:
-                    self.channel.queue_declare(queue=queue, passive=True)
-                except pika.exceptions.ChannelClosedByBroker as e:
-                    if '404' in str(e):  
-                        logger.info("Queue %s not found, creating it...", queue)
-                        self.channel.queue_declare(queue=queue, durable=True)
-                        
-                      
-                        if queue in ['email.queue', 'push.queue']:
-                            self.channel.queue_bind(
-                                exchange='notifications.direct', 
-                                queue=queue, 
-                                routing_key=queue
-                            )
-                    else:
-                        raise e
+                self.channel.queue_declare(queue=queue, durable=True)
+                
+                
+                if queue in ['email.queue', 'push.queue']:
+                    self.channel.queue_bind(
+                        exchange='notifications.direct', 
+                        queue=queue, 
+                        routing_key=queue.replace('.queue', '')  
+                    )
             
-            logger.info("Successfully connected to RabbitMQ")
+            logger.info("Successfully connected to RabbitMQ and created queues")
             
         except Exception as e:
             logger.error("Failed to connect to RabbitMQ: %s", str(e))
@@ -193,9 +187,12 @@ class RabbitMQService:
             if not self.connection or self.connection.is_closed:
                 self.connect()
                 
+            
+            queue_name = f"{routing_key}.queue"
+            
             self.channel.basic_publish(
                 exchange='notifications.direct',
-                routing_key=routing_key,
+                routing_key=routing_key,  
                 body=json.dumps(message),
                 properties=pika.BasicProperties(
                     delivery_mode=2,  
@@ -248,7 +245,7 @@ class NotificationService:
             }
             
             
-            routing_key = f"{notification_data['notification_type']}.queue"
+            routing_key = notification_data['notification_type']
             success = self._execute_with_retry_and_circuit_breaker(
                 self.mq_breaker,
                 lambda: self.rabbitmq.publish_message(routing_key, message),
