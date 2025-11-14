@@ -1,44 +1,45 @@
-# docker-compose.yml
 
 services:
   rabbitmq:
     image: rabbitmq:3-management
     ports:
-      - "5673:5672"      # Host:5673 → Container:5672
-      - "15673:15672"    # Management UI
+      - "5673:5672"
+      - "15673:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:-guest}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASS:-guest}"
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"      # Host:6380 → Container:6379
+      - "6380:6379"
 
   postgres:
     image: postgres:15
     environment:
-      POSTGRES_PASSWORD: xyler23
-      POSTGRES_DB: pushdb
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
     ports:
-      - "5433:5434"      # Host:5433 → Container:5432
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
 
   push-service:
     build: .
     ports:
-      - "4001:4001"
+      - "${PORT}:4001"
     environment:
-      # LOCAL URLs (for docker-compose)
-      - HOST=0.0.0.0
-      - NODE_ENV=development
-      - PORT=4001
-      - RABBIT_URL=amqp://guest:guest@rabbitmq:5672
-      - POSTGRES_URL=postgres://postgres:xyler23@postgres:5434/pushdb
-      - REDIS_URL=redis://redis:6379
-      - FCM_SERVICE_ACCOUNT_PATH=/app/secrets/firebase-admin.json
-      - MAX_RETRIES=5
+      - HOST=${HOST}
+      - NODE_ENV=${NODE_ENV}
+      - PORT=${PORT}
+      - RABBIT_URL=${RABBIT_URL}
+      - RABBIT_EXCHANGE=${RABBIT_EXCHANGE}
+      - PUSH_QUEUE=${PUSH_QUEUE}
+      - FAILED_QUEUE=${FAILED_QUEUE}
+      - POSTGRES_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - FCM_SERVICE_ACCOUNT_PATH=${FCM_SERVICE_ACCOUNT_PATH}
+      - MAX_RETRIES=${MAX_RETRIES}
     volumes:
       - ./secrets:/app/secrets:ro
       - ./logs:/app/logs
@@ -47,7 +48,7 @@ services:
       - redis
       - postgres
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:4001/health"]
+      test: ["CMD", "wget", "--spider", "http://localhost:${PORT}/health"]
       interval: 10s
       timeout: 5s
       retries: 5
