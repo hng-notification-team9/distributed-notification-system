@@ -40,6 +40,10 @@ services:
       - REDIS_URL=${REDIS_URL}
       - FCM_SERVICE_ACCOUNT_PATH=${FCM_SERVICE_ACCOUNT_PATH}
       - MAX_RETRIES=${MAX_RETRIES}
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
+      - FIREBASE_PRIVATE_KEY=${FIREBASE_PRIVATE_KEY}
+      - FIREBASE_CLIENT_EMAIL=${FIREBASE_CLIENT_EMAIL}
+
     volumes:
       - ./secrets:/app/secrets:ro
       - ./logs:/app/logs
@@ -48,10 +52,11 @@ services:
       - redis
       - postgres
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:${PORT}/health"]
+      test: ["CMD", "curl", "--fail", "http://localhost:${PORT}/health"]
       interval: 10s
       timeout: 5s
       retries: 5
+
 
 volumes:
   pg_data:
