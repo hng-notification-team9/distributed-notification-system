@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 async function deleteQueues() {
-  const conn = await amqplib.connect(process.env.RABBIT_URL!);
+  const conn = await amqplib.connect(process.env.RABBIT_URL || 'amqp://FwNsqaqF4BhGkO4L:tdUY5zWflmJ_j1p~KgIPBu0lRlrpf~eS@shinkansen.proxy.rlwy.net:58179');
   const ch = await conn.createChannel();
 
   const queues = ['push.queue', 'failed.queue'];
