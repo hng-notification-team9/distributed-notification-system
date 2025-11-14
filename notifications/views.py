@@ -46,30 +46,125 @@ class NotificationPagination(PageNumberPagination):
 class NotificationThrottle(UserRateThrottle):
     rate = '1000/hour'
 
-
 class NotificationView(APIView):
     throttle_classes = [NotificationThrottle]
     
-    def get(self, request):
-        try:
-            paginator = NotificationPagination()
-            notifications = Notification.objects.all().order_by('-created_at')
-            result_page = paginator.paginate_queryset(notifications, request)
-            
-            serializer = NotificationResponseSerializer(result_page, many=True)
-            return paginator.get_paginated_response(serializer.data)
-            
-        except Exception as e:
-            logger.error("Error listing notifications: %s", str(e))
-            return Response(
-                APIResponseSerializer({
-                    'success': False,
-                    'error': 'Internal server error',
-                    'message': 'Failed to retrieve notifications'
-                }).data,
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    @swagger_auto_schema(
+        operation_description="Create a new notification",
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            required=['notification_type', 'user_id', 'template_code', 'variables', 'request_id'],
+            properties={
+                'notification_type': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    enum=['email', 'push'],
+                    description="Type of notification to send"
+                ),
+                'user_id': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    format=openapi.FORMAT_UUID,
+                    description="Unique identifier for the user"
+                ),
+                'template_code': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="Template code for the notification"
+                ),
+                'variables': openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'name': openapi.Schema(type=openapi.TYPE_STRING),
+                        'link': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_URI),
+                        'meta': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            description="Optional metadata"
+                        )
+                    },
+                    required=['name', 'link'],
+                    description="Variables to substitute in the template"
+                ),
+                'request_id': openapi.Schema(
+                    type=openapi.TYPE_STRING,
+                    description="Unique request ID for idempotency"
+                ),
+                'priority': openapi.Schema(
+                    type=openapi.TYPE_INTEGER,
+                    minimum=1,
+                    maximum=10,
+                    default=1,
+                    description="Notification priority (1-10)"
+                ),
+                'metadata': openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    description="Optional additional metadata"
+                )
+            },
+            example={
+                "notification_type": "email",
+                "user_id": "123e4567-e89b-12d3-a456-426614174000",
+                "template_code": "welcome_email",
+                "variables": {
+                    "name": "John Doe",
+                    "link": "https://example.com/verify",
+                    "meta": {"source": "web"}
+                },
+                "request_id": "req_123456789",
+                "priority": 1,
+                "metadata": {"campaign": "welcome"}
+            }
+        ),
+        responses={
+            202: openapi.Response(
+                'Success',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'notification_id': openapi.Schema(type=openapi.TYPE_STRING),
+                                'status': openapi.Schema(type=openapi.TYPE_STRING)
+                            }
+                        ),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                ),
+                examples={
+                    'application/json': {
+                        "success": True,
+                        "data": {
+                            "notification_id": "req_123456789",
+                            "status": "queued"
+                        },
+                        "message": "Notification queued successfully"
+                    }
+                }
+            ),
+            400: openapi.Response(
+                'Validation Error',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'error': openapi.Schema(type=openapi.TYPE_STRING),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING),
+                        'data': openapi.Schema(type=openapi.TYPE_OBJECT)
+                    }
+                )
+            ),
+            503: openapi.Response(
+                'Service Unavailable',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'error': openapi.Schema(type=openapi.TYPE_STRING),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
             )
-
+        }
+    )
     def post(self, request):
         try:
             serializer = NotificationCreateSerializer(data=request.data)
@@ -125,6 +220,84 @@ class NotificationView(APIView):
                     'success': False,
                     'error': 'Internal server error',
                     'message': 'An error occurred while processing your request'
+                }).data,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @swagger_auto_schema(
+        operation_description="List all notifications with pagination",
+        manual_parameters=[
+            openapi.Parameter(
+                'page',
+                openapi.IN_QUERY,
+                description="Page number",
+                type=openapi.TYPE_INTEGER,
+                default=1
+            ),
+            openapi.Parameter(
+                'limit',
+                openapi.IN_QUERY,
+                description="Number of items per page",
+                type=openapi.TYPE_INTEGER,
+                default=20
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                'Success',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_ARRAY,
+                            items=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    'id': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_UUID),
+                                    'notification_type': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'user_id': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_UUID),
+                                    'template_code': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'request_id': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'priority': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'status': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'created_at': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                                }
+                            )
+                        ),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING),
+                        'meta': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'total': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'limit': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'page': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'total_pages': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'has_next': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                                'has_previous': openapi.Schema(type=openapi.TYPE_BOOLEAN)
+                            }
+                        )
+                    }
+                )
+            )
+        }
+    )
+    def get(self, request):
+        try:
+            paginator = NotificationPagination()
+            notifications = Notification.objects.all().order_by('-created_at')
+            result_page = paginator.paginate_queryset(notifications, request)
+            
+            serializer = NotificationResponseSerializer(result_page, many=True)
+            return paginator.get_paginated_response(serializer.data)
+            
+        except Exception as e:
+            logger.error("Error listing notifications: %s", str(e))
+            return Response(
+                APIResponseSerializer({
+                    'success': False,
+                    'error': 'Internal server error',
+                    'message': 'Failed to retrieve notifications'
                 }).data,
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
