@@ -1,7 +1,6 @@
 from django.urls import path
 from .views import (
     NotificationView, 
-    update_notification_status,
     circuit_breaker_status,
     reset_circuit_breaker,
     simulate_failure
