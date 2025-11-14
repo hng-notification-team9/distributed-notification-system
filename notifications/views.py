@@ -1,17 +1,16 @@
 import logging
 from rest_framework import status
 from rest_framework.views import APIView
-from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.core.exceptions import ObjectDoesNotExist
+from django.conf import settings
 from .models import Notification
 from .serializers import (
     NotificationCreateSerializer,
     NotificationStatusUpdateSerializer,
     NotificationResponseSerializer,
     APIResponseSerializer,
-    PaginationMetaSerializer
 )
 from .services import NotificationService, circuit_breaker_manager, CircuitBreakerError
 from rest_framework.throttling import UserRateThrottle
@@ -45,6 +44,7 @@ class NotificationPagination(PageNumberPagination):
 
 class NotificationThrottle(UserRateThrottle):
     rate = '1000/hour'
+
 
 class NotificationView(APIView):
     throttle_classes = [NotificationThrottle]
@@ -303,7 +303,6 @@ class NotificationView(APIView):
             )
 
 
-
 class NotificationStatusUpdateView(APIView):
     @extend_schema(
         request=NotificationStatusUpdateSerializer,
@@ -354,7 +353,6 @@ class NotificationStatusUpdateView(APIView):
                 'error': 'Not found',
                 'message': 'Notification not found'
             }, status=status.HTTP_404_NOT_FOUND)
-
 
 
 class CircuitBreakerStatusView(APIView):
