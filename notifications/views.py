@@ -130,32 +130,30 @@ class NotificationView(APIView):
 
 
 
-notification_type_param = openapi.Parameter(
-    'notification_type',
-    openapi.IN_PATH,
-    description="Notification type (email or push)",
-    type=openapi.TYPE_STRING,
-    required=True
-)
-
-@swagger_auto_schema(
-    method='post',
-    manual_parameters=[notification_type_param],
-    request_body=NotificationStatusUpdateSerializer,
-    responses={200: APIResponseSerializer()}
-)
-
-@api_view(['POST'])
-def update_notification_status(request, notification_type):
-    try:
+class NotificationStatusUpdateView(APIView):
+    @swagger_auto_schema(
+        request_body=NotificationStatusUpdateSerializer,
+        responses={200: APIResponseSerializer()},
+        manual_parameters=[
+            openapi.Parameter(
+                'notification_type',
+                openapi.IN_PATH,
+                description="Notification type (email or push)",
+                type=openapi.TYPE_STRING,
+                required=True
+            )
+        ]
+    )
+    def post(self, request, notification_type):
         serializer = NotificationStatusUpdateSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
-                APIResponseSerializer({
+                {
                     'success': False,
                     'error': 'Validation failed',
-                    'message': 'Invalid status update data'
-                }).data,
+                    'message': 'Invalid status update data',
+                    'data': serializer.errors
+                },
                 status=status.HTTP_400_BAD_REQUEST
             )
         
@@ -169,33 +167,17 @@ def update_notification_status(request, notification_type):
             
             logger.info("Notification %s status updated to %s", notification_id, data['status'])
             
-            return Response(
-                APIResponseSerializer({
-                    'success': True,
-                    'message': 'Status updated successfully'
-                }).data
-            )
+            return Response({
+                'success': True,
+                'message': 'Status updated successfully'
+            })
             
         except ObjectDoesNotExist:
-            return Response(
-                APIResponseSerializer({
-                    'success': False,
-                    'error': 'Not found',
-                    'message': 'Notification not found'
-                }).data,
-                status=status.HTTP_404_NOT_FOUND
-            )
-            
-    except Exception as e:
-        logger.error("Error updating notification status: %s", str(e))
-        return Response(
-            APIResponseSerializer({
+            return Response({
                 'success': False,
-                'error': 'Internal server error',
-                'message': 'Failed to update status'
-            }).data,
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+                'error': 'Not found',
+                'message': 'Notification not found'
+            }, status=status.HTTP_404_NOT_FOUND)
 
 
 
