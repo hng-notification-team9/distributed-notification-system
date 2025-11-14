@@ -357,64 +357,166 @@ class NotificationStatusUpdateView(APIView):
 
 
 
-@api_view(['GET'])
-def circuit_breaker_status(request):
+class CircuitBreakerStatusView(APIView):
     """Get current status of all circuit breakers"""
-    states = circuit_breaker_manager.get_all_states()
     
-    return Response({
-        'success': True,
-        'data': states,
-        'message': 'Circuit breaker status retrieved successfully'
-    })
-
-
-@api_view(['POST'])
-def reset_circuit_breaker(request, breaker_name):
-    """Reset a specific circuit breaker"""
-    try:
-        circuit_breaker_manager.reset_breaker(breaker_name)
-        return Response({
-            'success': True,
-            'message': f'Circuit breaker {breaker_name} reset successfully'
-        })
-    except KeyError:
-        return Response({
-            'success': False,
-            'error': 'Not found',
-            'message': f'Circuit breaker {breaker_name} not found'
-        }, status=status.HTTP_404_NOT_FOUND)
-
-
-@api_view(['POST'])
-def simulate_failure(request, breaker_name):
-    """Simulate failures to test circuit breaker (for testing only)"""
-    from django.conf import settings
-    
-    if not settings.DEBUG:
-        return Response({
-            'success': False,
-            'error': 'Not allowed',
-            'message': 'Failure simulation only allowed in DEBUG mode'
-        }, status=status.HTTP_403_FORBIDDEN)
-    
-    try:
-        breaker = circuit_breaker_manager.get_breaker(breaker_name)
-       
-        for i in range(breaker.failure_threshold + 1):
-            try:
-                breaker.call(lambda: 1/0)  
-            except (CircuitBreakerError, ZeroDivisionError):
-                pass
+    @swagger_auto_schema(
+        operation_description="Get current status of all circuit breakers",
+        responses={
+            200: openapi.Response(
+                'Success',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            additional_properties=openapi.Schema(
+                                type=openapi.TYPE_OBJECT,
+                                properties={
+                                    'state': openapi.Schema(type=openapi.TYPE_STRING),
+                                    'failure_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                    'last_failure_time': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                                    'next_retry_time': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                                }
+                            )
+                        ),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            )
+        }
+    )
+    def get(self, request):
+        states = circuit_breaker_manager.get_all_states()
         
         return Response({
             'success': True,
-            'message': f'Simulated failures for {breaker_name}. Circuit breaker should be OPEN now.',
-            'data': breaker.get_state()
+            'data': states,
+            'message': 'Circuit breaker status retrieved successfully'
         })
-    except KeyError:
-        return Response({
-            'success': False,
-            'error': 'Not found', 
-            'message': f'Circuit breaker {breaker_name} not found'
-        }, status=status.HTTP_404_NOT_FOUND)
+
+
+class CircuitBreakerResetView(APIView):
+    """Reset a specific circuit breaker"""
+    
+    @swagger_auto_schema(
+        operation_description="Reset a specific circuit breaker",
+        responses={
+            200: openapi.Response(
+                'Success',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            404: openapi.Response(
+                'Not Found',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'error': openapi.Schema(type=openapi.TYPE_STRING),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            )
+        }
+    )
+    def post(self, request, breaker_name):
+        try:
+            circuit_breaker_manager.reset_breaker(breaker_name)
+            return Response({
+                'success': True,
+                'message': f'Circuit breaker {breaker_name} reset successfully'
+            })
+        except KeyError:
+            return Response({
+                'success': False,
+                'error': 'Not found',
+                'message': f'Circuit breaker {breaker_name} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class CircuitBreakerSimulateFailureView(APIView):
+    """Simulate failures to test circuit breaker (for testing only)"""
+    
+    @swagger_auto_schema(
+        operation_description="Simulate failures to test circuit breaker (for testing only)",
+        responses={
+            200: openapi.Response(
+                'Success',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING),
+                        'data': openapi.Schema(
+                            type=openapi.TYPE_OBJECT,
+                            properties={
+                                'state': openapi.Schema(type=openapi.TYPE_STRING),
+                                'failure_count': openapi.Schema(type=openapi.TYPE_INTEGER),
+                                'last_failure_time': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME),
+                                'next_retry_time': openapi.Schema(type=openapi.TYPE_STRING, format=openapi.FORMAT_DATETIME)
+                            }
+                        )
+                    }
+                )
+            ),
+            403: openapi.Response(
+                'Forbidden',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'error': openapi.Schema(type=openapi.TYPE_STRING),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            ),
+            404: openapi.Response(
+                'Not Found',
+                openapi.Schema(
+                    type=openapi.TYPE_OBJECT,
+                    properties={
+                        'success': openapi.Schema(type=openapi.TYPE_BOOLEAN),
+                        'error': openapi.Schema(type=openapi.TYPE_STRING),
+                        'message': openapi.Schema(type=openapi.TYPE_STRING)
+                    }
+                )
+            )
+        }
+    )
+    def post(self, request, breaker_name):
+        from django.conf import settings
+        
+        if not settings.DEBUG:
+            return Response({
+                'success': False,
+                'error': 'Not allowed',
+                'message': 'Failure simulation only allowed in DEBUG mode'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        try:
+            breaker = circuit_breaker_manager.get_breaker(breaker_name)
+           
+            for i in range(breaker.failure_threshold + 1):
+                try:
+                    breaker.call(lambda: 1/0)  
+                except (CircuitBreakerError, ZeroDivisionError):
+                    pass
+            
+            return Response({
+                'success': True,
+                'message': f'Simulated failures for {breaker_name}. Circuit breaker should be OPEN now.',
+                'data': breaker.get_state()
+            })
+        except KeyError:
+            return Response({
+                'success': False,
+                'error': 'Not found', 
+                'message': f'Circuit breaker {breaker_name} not found'
+            }, status=status.HTTP_404_NOT_FOUND)
